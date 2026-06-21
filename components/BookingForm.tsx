@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
-import { createBooking, type BookingState } from "@/app/actions";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createBooking, saveAbandonedLead, type BookingState } from "@/app/actions";
 import {
   SERVICE_TYPES,
   FREQUENCIES,
@@ -73,6 +73,63 @@ export default function BookingForm() {
     });
   }, [data.serviceType, data.frequency, data.bedrooms, data.bathrooms]);
 
+  // ---- Captura de leads abandonados (requerimiento de Katerina) ----
+  // Si el visitante dejo datos de contacto y abandona sin terminar, guardamos
+  // un lead. Best effort: nunca rompe la UX, y solo se envia una vez.
+  const dataRef = useRef(data);
+  const stepRef = useRef(step);
+  const submittedRef = useRef(false);
+  const leadSentRef = useRef(false);
+  dataRef.current = data;
+  stepRef.current = step;
+  if (state?.ok) submittedRef.current = true;
+
+  const sendLeadIfAbandoned = useCallback(() => {
+    if (submittedRef.current || leadSentRef.current) return;
+    const d = dataRef.current;
+    const hasContact = Boolean(d.email.trim() || d.phone.trim());
+    if (!hasContact) return;
+    leadSentRef.current = true;
+    void saveAbandonedLead({
+      fullName: d.fullName,
+      email: d.email,
+      phone: d.phone,
+      zipCode: d.zipCode,
+      lastStepReached: STEP_TITLES[stepRef.current],
+      partialData: {
+        serviceType: d.serviceType,
+        frequency: d.frequency,
+        bedrooms: d.bedrooms,
+        bathrooms: d.bathrooms,
+        requestedExtras: d.requestedExtras,
+        allergies: d.allergies,
+        marketingOptIn: d.marketingOptIn,
+      },
+    });
+  }, []);
+
+  // Disparador 1: el visitante deja la pestana o cierra.
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === "hidden") sendLeadIfAbandoned();
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", sendLeadIfAbandoned);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", sendLeadIfAbandoned);
+    };
+  }, [sendLeadIfAbandoned]);
+
+  // Disparador 2: inactividad. Se reinicia con cada cambio; si pasa contacto y
+  // se queda 90 segundos sin avanzar, lo tomamos como lead.
+  const hasContact = data.email.trim() !== "" || data.phone.trim() !== "";
+  useEffect(() => {
+    if (!hasContact) return;
+    const t = window.setTimeout(sendLeadIfAbandoned, 90_000);
+    return () => window.clearTimeout(t);
+  }, [hasContact, data, step, sendLeadIfAbandoned]);
+
   function stepIsValid(s: number): boolean {
     switch (s) {
       case 0:
@@ -123,6 +180,11 @@ export default function BookingForm() {
         <p className="mt-6 text-xs uppercase tracking-widest text-sage">
           Reference {state.bookingId.slice(0, 8)}
         </p>
+        {state.mode === "local" && (
+          <p className="mt-3 text-xs text-amber">
+            Demo mode: saved locally in .data, not in Supabase yet.
+          </p>
+        )}
       </div>
     );
   }

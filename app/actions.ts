@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getStore, type StoreMode } from "@/lib/store";
 import { estimatePrice } from "@/lib/pricing";
 import {
   SERVICE_VALUES,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants";
 
 export type BookingState =
-  | { ok: true; bookingId: string; low: number; high: number }
+  | { ok: true; bookingId: string; low: number; high: number; mode: StoreMode }
   | { ok: false; error: string }
   | null;
 
@@ -63,71 +63,71 @@ export async function createBooking(
   });
 
   try {
-    const supabase = createAdminClient();
+    const store = getStore();
 
-    // ---- Buscar cliente existente por email, o crearlo ----
-    const { data: existing, error: findErr } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("email", email)
-      .limit(1)
-      .maybeSingle();
-    if (findErr) throw findErr;
-
-    let customerId = existing?.id as string | undefined;
-
-    const customerFields = {
-      full_name: fullName,
+    const customerId = await store.findOrCreateCustomer({
+      fullName,
+      email,
       phone: phone || null,
-      zip_code: zipCode || null,
-      allergies_sensitivities: allergies || null,
-      marketing_opt_in: marketingOptIn,
-    };
+      zipCode: zipCode || null,
+      allergies: allergies || null,
+      marketingOptIn,
+    });
 
-    if (!customerId) {
-      const { data: created, error: insErr } = await supabase
-        .from("customers")
-        .insert({ email, ...customerFields })
-        .select("id")
-        .single();
-      if (insErr) throw insErr;
-      customerId = created.id;
-    } else {
-      // Mantenemos en ficha los datos de contacto mas recientes.
-      const { error: updErr } = await supabase
-        .from("customers")
-        .update(customerFields)
-        .eq("id", customerId);
-      if (updErr) throw updErr;
-    }
-
-    // ---- Crear la reserva en estado pending ----
-    const { data: booking, error: bookErr } = await supabase
-      .from("bookings")
-      .insert({
-        customer_id: customerId,
-        service_type: serviceType,
-        frequency,
-        bedrooms,
-        bathrooms,
-        requested_extras: requestedExtras || null,
-        estimate_low: estimate.low,
-        estimate_high: estimate.high,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-    if (bookErr) throw bookErr;
+    const bookingId = await store.createBooking(customerId, {
+      serviceType,
+      frequency,
+      bedrooms,
+      bathrooms,
+      requestedExtras: requestedExtras || null,
+      estimateLow: estimate.low,
+      estimateHigh: estimate.high,
+    });
 
     return {
       ok: true,
-      bookingId: booking.id,
+      bookingId,
       low: estimate.low,
       high: estimate.high,
+      mode: store.mode,
     };
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "We could not save your booking.";
     return { ok: false, error: message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Captura de leads abandonados (requerimiento de Katerina).
+// Se llama desde el cliente cuando alguien dejo datos de contacto y abandona
+// la reserva sin terminarla. Es best-effort: nunca debe romper la UX.
+// ---------------------------------------------------------------------------
+export async function saveAbandonedLead(payload: {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  zipCode?: string;
+  lastStepReached?: string;
+  partialData?: Record<string, unknown>;
+}): Promise<{ ok: boolean }> {
+  // Sin al menos un dato de contacto no tiene sentido (y respeta privacidad).
+  const hasContact = Boolean(payload.email?.trim() || payload.phone?.trim());
+  if (!hasContact) return { ok: false };
+
+  try {
+    const store = getStore();
+    await store.saveAbandonedLead({
+      fullName: payload.fullName?.trim() || null,
+      email: payload.email?.trim().toLowerCase() || null,
+      phone: payload.phone?.trim() || null,
+      zipCode: payload.zipCode?.trim() || null,
+      lastStepReached: payload.lastStepReached || null,
+      partialData: payload.partialData ?? null,
+    });
+    return { ok: true };
+  } catch (err) {
+    console.error("[saveAbandonedLead] no se pudo guardar el lead:", err);
+    return { ok: false };
   }
 }
