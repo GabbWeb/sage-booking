@@ -245,3 +245,65 @@ export async function addExtraChargeToBooking(input: {
     return { ok: false, error: message };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Google Calendar (Fase 3). Sage confirma fecha y hora, y creamos el evento en
+// el calendario con los datos de la reserva (servicio, cliente, notas). Pensado
+// para el panel de administracion. Requiere service account configurada.
+// ---------------------------------------------------------------------------
+export type CalendarSyncResult =
+  | { ok: true; eventId: string }
+  | { ok: false; error: string };
+
+export async function syncBookingToCalendar(input: {
+  bookingId: string;
+  startISO: string;
+  endISO: string;
+  location?: string;
+}): Promise<CalendarSyncResult> {
+  const { googleCalendarConfigured, createCalendarEvent } = await import(
+    "@/lib/google/calendar"
+  );
+  if (!googleCalendarConfigured()) {
+    return { ok: false, error: "Google Calendar is not configured yet." };
+  }
+  if (!input.startISO || !input.endISO) {
+    return { ok: false, error: "A start and end time are required." };
+  }
+
+  try {
+    const store = getStore();
+    const booking = await store.getBooking(input.bookingId);
+    if (!booking) return { ok: false, error: "Booking not found." };
+
+    const c = booking.customer;
+    const name = c?.full_name ?? "Customer";
+    const notes = [
+      `Service: ${serviceLabel(booking.service_type)} (${booking.frequency})`,
+      `Home: ${booking.bedrooms} bed, ${booking.bathrooms} bath`,
+      booking.requested_extras ? `Extras: ${booking.requested_extras}` : "",
+      c?.allergies_sensitivities
+        ? `Sensitivities: ${c.allergies_sensitivities}`
+        : "",
+      c?.phone ? `Phone: ${c.phone}` : "",
+      c?.email ? `Email: ${c.email}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const eventId = await createCalendarEvent({
+      summary: `${serviceLabel(booking.service_type)} for ${name}`,
+      description: notes,
+      location: input.location || c?.zip_code || undefined,
+      startISO: input.startISO,
+      endISO: input.endISO,
+    });
+
+    await store.setBookingCalendarEvent(input.bookingId, eventId);
+    return { ok: true, eventId };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not create the event.";
+    return { ok: false, error: message };
+  }
+}

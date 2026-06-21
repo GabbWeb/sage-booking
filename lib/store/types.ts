@@ -46,6 +46,7 @@ export type StoredBooking = {
   final_amount: number | null;
   status: string;
   stripe_payment_intent_id: string | null;
+  google_calendar_event_id: string | null;
   created_at: string;
 };
 
@@ -53,6 +54,9 @@ export type BookingCustomer = {
   id: string;
   email: string;
   full_name: string;
+  phone: string | null;
+  zip_code: string | null;
+  allergies_sensitivities: string | null;
   stripe_customer_id: string | null;
 };
 
@@ -95,4 +99,8 @@ export interface DataStore {
   ): Promise<void>;
   /** Registra un cargo extra y devuelve su id. */
   addExtraCharge(bookingId: string, input: ExtraChargeInput): Promise<string>;
+
+  // --- Google Calendar (Fase 3) ---
+  /** Guarda el id del evento de Google Calendar en la reserva. */
+  setBookingCalendarEvent(bookingId: string, eventId: string): Promise<void>;
 }

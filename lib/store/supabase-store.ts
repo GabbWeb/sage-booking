@@ -11,7 +11,10 @@ import type {
 } from "./types";
 
 const BOOKING_COLUMNS =
-  "id, customer_id, service_type, frequency, bedrooms, bathrooms, requested_extras, estimate_low, estimate_high, final_amount, status, stripe_payment_intent_id, created_at";
+  "id, customer_id, service_type, frequency, bedrooms, bathrooms, requested_extras, estimate_low, estimate_high, final_amount, status, stripe_payment_intent_id, google_calendar_event_id, created_at";
+
+const CUSTOMER_COLUMNS =
+  "id, email, full_name, phone, zip_code, allergies_sensitivities, stripe_customer_id";
 
 // Store de PRODUCCION: escribe en Postgres via la service_role key. Misma
 // interfaz que FileStore, asi la Server Action no sabe ni le importa cual usa.
@@ -124,7 +127,7 @@ export class SupabaseStore implements DataStore {
     if (booking.customer_id) {
       const { data: c, error: cErr } = await supabase
         .from("customers")
-        .select("id, email, full_name, stripe_customer_id")
+        .select(CUSTOMER_COLUMNS)
         .eq("id", booking.customer_id)
         .maybeSingle();
       if (cErr) throw cErr;
@@ -181,5 +184,17 @@ export class SupabaseStore implements DataStore {
       .single();
     if (error) throw error;
     return data.id as string;
+  }
+
+  async setBookingCalendarEvent(
+    bookingId: string,
+    eventId: string,
+  ): Promise<void> {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("bookings")
+      .update({ google_calendar_event_id: eventId })
+      .eq("id", bookingId);
+    if (error) throw error;
   }
 }

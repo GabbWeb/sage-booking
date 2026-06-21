@@ -124,6 +124,7 @@ export class FileStore implements DataStore {
         final_amount: null,
         status: "pending",
         stripe_payment_intent_id: null,
+        google_calendar_event_id: null,
         created_at: new Date().toISOString(),
       });
       await writeDb(db);
@@ -173,6 +174,9 @@ export class FileStore implements DataStore {
               id: c.id,
               email: c.email,
               full_name: c.full_name,
+              phone: c.phone,
+              zip_code: c.zip_code,
+              allergies_sensitivities: c.allergies_sensitivities,
               stripe_customer_id: c.stripe_customer_id,
             }
           : null,
@@ -225,6 +229,17 @@ export class FileStore implements DataStore {
       });
       await writeDb(db);
       return id;
+    });
+  }
+
+  setBookingCalendarEvent(bookingId: string, eventId: string): Promise<void> {
+    return withLock(async () => {
+      const db = await readDb();
+      const b = db.bookings.find((x) => x.id === bookingId);
+      if (b) {
+        b.google_calendar_event_id = eventId;
+        await writeDb(db);
+      }
     });
   }
 }
