@@ -1,0 +1,488 @@
+"use client";
+
+import { useActionState, useMemo, useState } from "react";
+import { createBooking, type BookingState } from "@/app/actions";
+import {
+  SERVICE_TYPES,
+  FREQUENCIES,
+  serviceLabel,
+  frequencyLabel,
+  type ServiceType,
+  type Frequency,
+} from "@/lib/constants";
+import { estimatePrice, formatUsd } from "@/lib/pricing";
+
+type FormShape = {
+  serviceType: ServiceType | "";
+  frequency: Frequency | "";
+  bedrooms: number;
+  bathrooms: number;
+  requestedExtras: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  zipCode: string;
+  allergies: string;
+  marketingOptIn: boolean;
+};
+
+const INITIAL: FormShape = {
+  serviceType: "",
+  frequency: "",
+  bedrooms: 2,
+  bathrooms: 1,
+  requestedExtras: "",
+  fullName: "",
+  email: "",
+  phone: "",
+  zipCode: "",
+  allergies: "",
+  marketingOptIn: true,
+};
+
+const STEP_TITLES = [
+  "Choose your clean",
+  "How often",
+  "About your home",
+  "Your details",
+  "Review and request",
+];
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+export default function BookingForm() {
+  const [state, formAction, pending] = useActionState<BookingState, FormData>(
+    createBooking,
+    null,
+  );
+  const [step, setStep] = useState(0);
+  const [data, setData] = useState<FormShape>(INITIAL);
+  const [touchedNext, setTouchedNext] = useState(false);
+
+  function update<K extends keyof FormShape>(key: K, value: FormShape[K]) {
+    setData((d) => ({ ...d, [key]: value }));
+  }
+
+  const estimate = useMemo(() => {
+    if (!data.serviceType || !data.frequency) return null;
+    return estimatePrice({
+      serviceType: data.serviceType,
+      frequency: data.frequency,
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+    });
+  }, [data.serviceType, data.frequency, data.bedrooms, data.bathrooms]);
+
+  function stepIsValid(s: number): boolean {
+    switch (s) {
+      case 0:
+        return data.serviceType !== "";
+      case 1:
+        return data.frequency !== "";
+      case 2:
+        return (
+          data.bedrooms >= 0 &&
+          data.bedrooms <= 20 &&
+          data.bathrooms >= 0 &&
+          data.bathrooms <= 20
+        );
+      case 3:
+        return data.fullName.trim() !== "" && EMAIL_RE.test(data.email.trim());
+      default:
+        return true;
+    }
+  }
+
+  function goNext() {
+    if (!stepIsValid(step)) {
+      setTouchedNext(true);
+      return;
+    }
+    setTouchedNext(false);
+    setStep((s) => Math.min(s + 1, STEP_TITLES.length - 1));
+  }
+
+  function goBack() {
+    setTouchedNext(false);
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
+  // ---- Pantalla de confirmacion ----
+  if (state?.ok) {
+    return (
+      <div className="rounded-2xl border border-sage/30 bg-cream p-10 text-center shadow-sm">
+        <p className="font-display text-sm uppercase tracking-[0.2em] text-amber">
+          Request received
+        </p>
+        <h2 className="mt-3 text-4xl text-ink">Thank you, {data.fullName.split(" ")[0]}</h2>
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-sage-deep">
+          We have your request for a {serviceLabel(data.serviceType || "")} and will
+          reach out shortly to confirm the date and finalize your estimate of{" "}
+          {formatUsd(state.low)} to {formatUsd(state.high)}.
+        </p>
+        <p className="mt-6 text-xs uppercase tracking-widest text-sage">
+          Reference {state.bookingId.slice(0, 8)}
+        </p>
+      </div>
+    );
+  }
+
+  const isLastStep = step === STEP_TITLES.length - 1;
+
+  return (
+    <form action={formAction} className="flex flex-col gap-8">
+      {/* Hidden inputs: cargan el estado controlado en el FormData al enviar */}
+      <input type="hidden" name="serviceType" value={data.serviceType} />
+      <input type="hidden" name="frequency" value={data.frequency} />
+      <input type="hidden" name="bedrooms" value={data.bedrooms} />
+      <input type="hidden" name="bathrooms" value={data.bathrooms} />
+      <input type="hidden" name="requestedExtras" value={data.requestedExtras} />
+      <input type="hidden" name="fullName" value={data.fullName} />
+      <input type="hidden" name="email" value={data.email} />
+      <input type="hidden" name="phone" value={data.phone} />
+      <input type="hidden" name="zipCode" value={data.zipCode} />
+      <input type="hidden" name="allergies" value={data.allergies} />
+      {data.marketingOptIn && (
+        <input type="hidden" name="marketingOptIn" value="on" />
+      )}
+
+      <Stepper step={step} />
+
+      <div>
+        <h2 className="text-3xl text-ink">{STEP_TITLES[step]}</h2>
+        <div className="mt-6">
+          {step === 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {SERVICE_TYPES.map((s) => (
+                <SelectCard
+                  key={s.value}
+                  selected={data.serviceType === s.value}
+                  title={s.label}
+                  blurb={s.blurb}
+                  onClick={() => update("serviceType", s.value)}
+                />
+              ))}
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {FREQUENCIES.map((f) => (
+                <SelectCard
+                  key={f.value}
+                  selected={data.frequency === f.value}
+                  title={f.label}
+                  blurb={f.note}
+                  onClick={() => update("frequency", f.value)}
+                />
+              ))}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="flex flex-col gap-6">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Counter
+                  label="Bedrooms"
+                  value={data.bedrooms}
+                  min={0}
+                  max={20}
+                  onChange={(v) => update("bedrooms", v)}
+                />
+                <Counter
+                  label="Bathrooms"
+                  value={data.bathrooms}
+                  min={0}
+                  max={20}
+                  onChange={(v) => update("bathrooms", v)}
+                />
+              </div>
+              <Field label="Anything extra? (optional)">
+                <textarea
+                  value={data.requestedExtras}
+                  onChange={(e) => update("requestedExtras", e.target.value)}
+                  rows={3}
+                  placeholder="Inside the fridge, inside the oven, interior windows..."
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="flex flex-col gap-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Full name" required>
+                  <input
+                    value={data.fullName}
+                    onChange={(e) => update("fullName", e.target.value)}
+                    placeholder="Jane Rivera"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Email" required>
+                  <input
+                    type="email"
+                    value={data.email}
+                    onChange={(e) => update("email", e.target.value)}
+                    placeholder="jane@email.com"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Phone (optional)">
+                  <input
+                    type="tel"
+                    value={data.phone}
+                    onChange={(e) => update("phone", e.target.value)}
+                    placeholder="(512) 555 0142"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Zip code (optional)">
+                  <input
+                    value={data.zipCode}
+                    onChange={(e) => update("zipCode", e.target.value)}
+                    placeholder="78704"
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+              <Field label="Allergies or sensitivities (optional)">
+                <textarea
+                  value={data.allergies}
+                  onChange={(e) => update("allergies", e.target.value)}
+                  rows={2}
+                  placeholder="Fragrance free please, sensitive to citrus..."
+                  className={inputClass}
+                />
+              </Field>
+              <label className="flex items-start gap-3 text-sm text-sage-deep">
+                <input
+                  type="checkbox"
+                  checked={data.marketingOptIn}
+                  onChange={(e) => update("marketingOptIn", e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-sage-deep"
+                />
+                <span>
+                  Keep me posted with seasonal tips and offers from Sage Essence.
+                </span>
+              </label>
+            </div>
+          )}
+
+          {step === 4 && <Review data={data} estimate={estimate} />}
+        </div>
+
+        {touchedNext && !stepIsValid(step) && (
+          <p className="mt-4 text-sm text-amber">
+            Please complete this step before continuing.
+          </p>
+        )}
+      </div>
+
+      {/* Estimado en vivo */}
+      {estimate && (
+        <div className="flex items-center justify-between rounded-xl border border-sage/30 bg-cream px-5 py-4">
+          <span className="text-xs uppercase tracking-widest text-sage">
+            Estimated range
+          </span>
+          <span className="font-display text-2xl text-ink">
+            {formatUsd(estimate.low)} to {formatUsd(estimate.high)}
+          </span>
+        </div>
+      )}
+
+      {/* Error del servidor */}
+      {state && !state.ok && (
+        <p className="rounded-xl border border-amber/40 bg-amber-light/20 px-4 py-3 text-sm text-ink">
+          {state.error}
+        </p>
+      )}
+
+      {/* Navegacion */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={goBack}
+          disabled={step === 0}
+          className="text-sm uppercase tracking-widest text-sage-deep transition disabled:invisible hover:text-ink"
+        >
+          Back
+        </button>
+
+        {!isLastStep ? (
+          <button type="button" onClick={goNext} className={primaryBtn}>
+            Continue
+          </button>
+        ) : (
+          <button type="submit" disabled={pending} className={primaryBtn}>
+            {pending ? "Sending..." : "Request this clean"}
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Subcomponentes
+// ---------------------------------------------------------------------------
+
+const inputClass =
+  "w-full rounded-lg border border-sage/40 bg-paper px-4 py-3 text-ink outline-none transition placeholder:text-sage/70 focus:border-sage-deep focus:ring-1 focus:ring-sage-deep";
+
+const primaryBtn =
+  "rounded-full bg-sage-deep px-8 py-3 text-sm uppercase tracking-widest text-paper transition hover:bg-ink disabled:opacity-60";
+
+function Stepper({ step }: { step: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      {STEP_TITLES.map((_, i) => (
+        <span
+          key={i}
+          className={`h-1 flex-1 rounded-full transition ${
+            i <= step ? "bg-sage-deep" : "bg-sage/25"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SelectCard({
+  selected,
+  title,
+  blurb,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  blurb: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-5 text-left transition ${
+        selected
+          ? "border-sage-deep bg-cream shadow-sm"
+          : "border-sage/30 bg-paper hover:border-sage"
+      }`}
+    >
+      <span className="block font-display text-xl text-ink">{title}</span>
+      <span className="mt-1 block text-sm leading-relaxed text-sage-deep">
+        {blurb}
+      </span>
+    </button>
+  );
+}
+
+function Counter({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-2 block text-sm uppercase tracking-widest text-sage">
+        {label}
+      </span>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="h-10 w-10 rounded-full border border-sage/40 text-xl text-sage-deep transition hover:border-sage-deep"
+          aria-label={`Decrease ${label}`}
+        >
+          &minus;
+        </button>
+        <span className="w-10 text-center font-display text-2xl text-ink">
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(max, value + 1))}
+          className="h-10 w-10 rounded-full border border-sage/40 text-xl text-sage-deep transition hover:border-sage-deep"
+          aria-label={`Increase ${label}`}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm uppercase tracking-widest text-sage">
+        {label}
+        {required && <span className="text-amber"> *</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Review({
+  data,
+  estimate,
+}: {
+  data: FormShape;
+  estimate: ReturnType<typeof estimatePrice> | null;
+}) {
+  const rows: Array<[string, string]> = [
+    ["Clean", data.serviceType ? serviceLabel(data.serviceType) : "Not set"],
+    ["Frequency", data.frequency ? frequencyLabel(data.frequency) : "Not set"],
+    ["Home", `${data.bedrooms} bed, ${data.bathrooms} bath`],
+    ["Name", data.fullName || "Not set"],
+    ["Email", data.email || "Not set"],
+    ["Phone", data.phone || "Not provided"],
+    ["Zip", data.zipCode || "Not provided"],
+  ];
+  if (data.requestedExtras) rows.push(["Extras", data.requestedExtras]);
+  if (data.allergies) rows.push(["Sensitivities", data.allergies]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <dl className="divide-y divide-sage/20 rounded-xl border border-sage/30 bg-cream">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex gap-4 px-5 py-3">
+            <dt className="w-32 shrink-0 text-sm uppercase tracking-widest text-sage">
+              {k}
+            </dt>
+            <dd className="text-ink">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-sm leading-relaxed text-sage-deep">
+        This is an estimate, not a final charge. We will confirm the date and the
+        final price with you before any payment.
+        {estimate && estimate.discount > 0 && (
+          <>
+            {" "}
+            Your {frequencyLabel(data.frequency || "")} plan already includes a{" "}
+            {Math.round(estimate.discount * 100)} percent discount.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}

@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...pero si versionamos las plantillas de ejemplo (sin secretos)
+!.env*.example
+
+# local dev data store (fallback sin Supabase) - nunca se versiona
+/.data/
 
 # vercel
 .vercel
