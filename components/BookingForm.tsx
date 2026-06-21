@@ -80,9 +80,15 @@ export default function BookingForm() {
   const stepRef = useRef(step);
   const submittedRef = useRef(false);
   const leadSentRef = useRef(false);
-  dataRef.current = data;
-  stepRef.current = step;
-  if (state?.ok) submittedRef.current = true;
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  useEffect(() => {
+    if (state?.ok) submittedRef.current = true;
+  }, [state]);
 
   const sendLeadIfAbandoned = useCallback(() => {
     if (submittedRef.current || leadSentRef.current) return;
@@ -129,6 +135,18 @@ export default function BookingForm() {
     const t = window.setTimeout(sendLeadIfAbandoned, 90_000);
     return () => window.clearTimeout(t);
   }, [hasContact, data, step, sendLeadIfAbandoned]);
+
+  // Accesibilidad: al cambiar de paso, llevamos el foco al titulo del paso para
+  // que lectores de pantalla anuncien el nuevo contenido. Saltea el montaje.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    headingRef.current?.focus();
+  }, [step]);
 
   function stepIsValid(s: number): boolean {
     switch (s) {
@@ -192,7 +210,18 @@ export default function BookingForm() {
   const isLastStep = step === STEP_TITLES.length - 1;
 
   return (
-    <form action={formAction} className="flex flex-col gap-8">
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        // Enter en un campo antes del ultimo paso no envia la reserva
+        // incompleta: avanzamos de paso.
+        if (!isLastStep) {
+          e.preventDefault();
+          goNext();
+        }
+      }}
+      className="flex flex-col gap-8"
+    >
       {/* Hidden inputs: cargan el estado controlado en el FormData al enviar */}
       <input type="hidden" name="serviceType" value={data.serviceType} />
       <input type="hidden" name="frequency" value={data.frequency} />
@@ -211,7 +240,16 @@ export default function BookingForm() {
       <Stepper step={step} />
 
       <div>
-        <h2 className="text-3xl text-ink">{STEP_TITLES[step]}</h2>
+        <p className="text-xs uppercase tracking-widest text-sage">
+          Step {step + 1} of {STEP_TITLES.length}
+        </p>
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="mt-1 text-3xl text-ink outline-none"
+        >
+          {STEP_TITLES[step]}
+        </h2>
         <div className="mt-6">
           {step === 0 && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -336,7 +374,7 @@ export default function BookingForm() {
         </div>
 
         {touchedNext && !stepIsValid(step) && (
-          <p className="mt-4 text-sm text-amber">
+          <p role="alert" className="mt-4 text-sm text-amber">
             Please complete this step before continuing.
           </p>
         )}
@@ -356,7 +394,10 @@ export default function BookingForm() {
 
       {/* Error del servidor */}
       {state && !state.ok && (
-        <p className="rounded-xl border border-amber/40 bg-amber-light/20 px-4 py-3 text-sm text-ink">
+        <p
+          role="alert"
+          className="rounded-xl border border-amber/40 bg-amber-light/20 px-4 py-3 text-sm text-ink"
+        >
           {state.error}
         </p>
       )}
@@ -398,7 +439,14 @@ const primaryBtn =
 
 function Stepper({ step }: { step: number }) {
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className="flex items-center gap-2"
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={STEP_TITLES.length}
+      aria-valuenow={step + 1}
+      aria-label={`Step ${step + 1} of ${STEP_TITLES.length}: ${STEP_TITLES[step]}`}
+    >
       {STEP_TITLES.map((_, i) => (
         <span
           key={i}
@@ -426,7 +474,8 @@ function SelectCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border p-5 text-left transition ${
+      aria-pressed={selected}
+      className={`rounded-xl border p-5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sage-deep ${
         selected
           ? "border-sage-deep bg-cream shadow-sm"
           : "border-sage/30 bg-paper hover:border-sage"
