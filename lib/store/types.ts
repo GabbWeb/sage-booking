@@ -43,8 +43,33 @@ export type StoredBooking = {
   requested_extras: string | null;
   estimate_low: number;
   estimate_high: number;
+  final_amount: number | null;
   status: string;
+  stripe_payment_intent_id: string | null;
   created_at: string;
+};
+
+export type BookingCustomer = {
+  id: string;
+  email: string;
+  full_name: string;
+  stripe_customer_id: string | null;
+};
+
+export type BookingWithCustomer = StoredBooking & {
+  customer: BookingCustomer | null;
+};
+
+export type BookingPaymentFields = {
+  status?: string;
+  finalAmount?: number;
+  stripePaymentIntentId?: string;
+};
+
+export type ExtraChargeInput = {
+  description: string;
+  amount: number;
+  stripeChargeId?: string | null;
 };
 
 export interface DataStore {
@@ -57,4 +82,17 @@ export interface DataStore {
   saveAbandonedLead(input: LeadInput): Promise<string>;
   /** Solo para panel/diagnostico: ultimas reservas. */
   listBookings(limit?: number): Promise<StoredBooking[]>;
+
+  // --- Pagos (Fase 2) ---
+  /** Reserva + datos del cliente, para armar el pago. */
+  getBooking(id: string): Promise<BookingWithCustomer | null>;
+  /** Guarda el id de Stripe Customer en la ficha del cliente. */
+  setCustomerStripeId(customerId: string, stripeCustomerId: string): Promise<void>;
+  /** Actualiza estado / pago de una reserva (idempotente). */
+  updateBookingPayment(
+    bookingId: string,
+    fields: BookingPaymentFields,
+  ): Promise<void>;
+  /** Registra un cargo extra y devuelve su id. */
+  addExtraCharge(bookingId: string, input: ExtraChargeInput): Promise<string>;
 }

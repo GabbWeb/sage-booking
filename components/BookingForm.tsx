@@ -90,6 +90,14 @@ export default function BookingForm() {
     if (state?.ok) submittedRef.current = true;
   }, [state]);
 
+  // Si Stripe esta activo, la reserva devuelve una URL de pago: redirigimos a
+  // la pagina segura de Stripe Checkout.
+  useEffect(() => {
+    if (state?.ok && state.checkoutUrl) {
+      window.location.href = state.checkoutUrl;
+    }
+  }, [state]);
+
   const sendLeadIfAbandoned = useCallback(() => {
     if (submittedRef.current || leadSentRef.current) return;
     const d = dataRef.current;
@@ -182,7 +190,26 @@ export default function BookingForm() {
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  // ---- Pantalla de confirmacion ----
+  // ---- Redirigiendo a Stripe Checkout ----
+  if (state?.ok && state.checkoutUrl) {
+    return (
+      <div className="rounded-2xl border border-sage/30 bg-cream p-10 text-center shadow-sm">
+        <p className="font-display text-sm uppercase tracking-[0.2em] text-amber">
+          Almost there
+        </p>
+        <h2 className="mt-3 text-3xl text-ink">Taking you to secure payment</h2>
+        <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-sage-deep">
+          If you are not redirected,{" "}
+          <a href={state.checkoutUrl} className="text-sage-deep underline">
+            click here to pay
+          </a>
+          .
+        </p>
+      </div>
+    );
+  }
+
+  // ---- Pantalla de confirmacion (flujo sin pago) ----
   if (state?.ok) {
     return (
       <div className="rounded-2xl border border-sage/30 bg-cream p-10 text-center shadow-sm">

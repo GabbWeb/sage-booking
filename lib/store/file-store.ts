@@ -3,8 +3,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type {
   BookingInput,
+  BookingPaymentFields,
+  BookingWithCustomer,
   CustomerInput,
   DataStore,
+  ExtraChargeInput,
   LeadInput,
   StoredBooking,
 } from "./types";
@@ -26,10 +29,12 @@ type Db = {
       zip_code: string | null;
       allergies_sensitivities: string | null;
       marketing_opt_in: boolean;
+      stripe_customer_id: string | null;
       created_at: string;
     }
   >;
   bookings: StoredBooking[];
+  extra_charges: Array<Record<string, unknown>>;
   abandoned_leads: Array<Record<string, unknown>>;
   email_log: Array<Record<string, unknown>>;
 };
@@ -37,6 +42,7 @@ type Db = {
 const EMPTY_DB: Db = {
   customers: [],
   bookings: [],
+  extra_charges: [],
   abandoned_leads: [],
   email_log: [],
 };
@@ -92,6 +98,7 @@ export class FileStore implements DataStore {
       db.customers.push({
         id,
         email,
+        stripe_customer_id: null,
         created_at: new Date().toISOString(),
         ...fields,
       });
@@ -114,7 +121,9 @@ export class FileStore implements DataStore {
         requested_extras: input.requestedExtras ?? null,
         estimate_low: input.estimateLow,
         estimate_high: input.estimateHigh,
+        final_amount: null,
         status: "pending",
+        stripe_payment_intent_id: null,
         created_at: new Date().toISOString(),
       });
       await writeDb(db);
@@ -148,6 +157,74 @@ export class FileStore implements DataStore {
       return [...db.bookings]
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .slice(0, limit);
+    });
+  }
+
+  getBooking(id: string): Promise<BookingWithCustomer | null> {
+    return withLock(async () => {
+      const db = await readDb();
+      const booking = db.bookings.find((b) => b.id === id);
+      if (!booking) return null;
+      const c = db.customers.find((x) => x.id === booking.customer_id);
+      return {
+        ...booking,
+        customer: c
+          ? {
+              id: c.id,
+              email: c.email,
+              full_name: c.full_name,
+              stripe_customer_id: c.stripe_customer_id,
+            }
+          : null,
+      };
+    });
+  }
+
+  setCustomerStripeId(
+    customerId: string,
+    stripeCustomerId: string,
+  ): Promise<void> {
+    return withLock(async () => {
+      const db = await readDb();
+      const c = db.customers.find((x) => x.id === customerId);
+      if (c) {
+        c.stripe_customer_id = stripeCustomerId;
+        await writeDb(db);
+      }
+    });
+  }
+
+  updateBookingPayment(
+    bookingId: string,
+    fields: BookingPaymentFields,
+  ): Promise<void> {
+    return withLock(async () => {
+      const db = await readDb();
+      const b = db.bookings.find((x) => x.id === bookingId);
+      if (!b) return;
+      if (fields.status !== undefined) b.status = fields.status;
+      if (fields.finalAmount !== undefined) b.final_amount = fields.finalAmount;
+      if (fields.stripePaymentIntentId !== undefined) {
+        b.stripe_payment_intent_id = fields.stripePaymentIntentId;
+      }
+      await writeDb(db);
+    });
+  }
+
+  addExtraCharge(bookingId: string, input: ExtraChargeInput): Promise<string> {
+    return withLock(async () => {
+      const db = await readDb();
+      const id = randomUUID();
+      db.extra_charges.push({
+        id,
+        booking_id: bookingId,
+        description: input.description,
+        amount: input.amount,
+        stripe_charge_id: input.stripeChargeId ?? null,
+        charged_at: new Date().toISOString(),
+      });
+      await writeDb(db);
+      return id;
     });
   }
 }
