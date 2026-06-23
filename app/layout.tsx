@@ -21,12 +21,26 @@ export const metadata: Metadata = {
   title: "Book a Clean | Sage Essence",
   description:
     "Non toxic home cleaning in Austin. Reserve your clean with Sage Essence.",
+  keywords: [
+    "non-toxic cleaning Austin",
+    "eco-friendly house cleaning",
+    "green cleaning service Austin TX",
+    "hypoallergenic cleaning",
+    "pet safe cleaning",
+  ],
+  authors: [{ name: "Sage Essence LLC" }],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
   openGraph: {
     title: "Book a Clean | Sage Essence",
     description:
       "Non toxic home cleaning in Austin. Reserve your clean with Sage Essence.",
     siteName: "Sage Essence",
     type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",

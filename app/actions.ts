@@ -166,7 +166,7 @@ export async function createBooking(
           amountCents: bookingChargeCents(estimate.low),
           description: `${serviceLabel(serviceType)}, Sage Essence`,
           successUrl: `${origin}/booking/success?booking=${bookingId}`,
-          cancelUrl: `${origin}/?canceled=1`,
+          cancelUrl: `${origin}/booking?canceled=1`,
         });
         checkoutUrl = session.url;
       } catch (stripeErr) {

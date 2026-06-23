@@ -5,6 +5,8 @@ import { createBooking, saveAbandonedLead, type BookingState } from "@/app/actio
 import {
   SERVICE_TYPES,
   FREQUENCIES,
+  SERVICE_VALUES,
+  FREQUENCY_VALUES,
   serviceLabel,
   frequencyLabel,
   type ServiceType,
@@ -64,6 +66,64 @@ const TIME_SLOTS: Array<{ value: string; label: string }> = [
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+// Datos que llegan precargados desde el landing (handoff). Todo opcional: el
+// server component los lee de la URL (?prefill=1&...) y los pasa como prop.
+export type BookingPrefill = {
+  serviceType?: string;
+  frequency?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  requestedExtras?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  zipCode?: string;
+  allergies?: string;
+};
+
+function clampRooms(n: number | undefined, fallback: number): number {
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 20
+    ? n
+    : fallback;
+}
+
+// Estado inicial del formulario, ya con lo que venga del landing aplicado.
+function buildInitial(prefill?: BookingPrefill | null): FormShape {
+  if (!prefill) return INITIAL;
+  const svc = prefill.serviceType ?? "";
+  const freq = prefill.frequency ?? "";
+  return {
+    ...INITIAL,
+    serviceType: (SERVICE_VALUES as string[]).includes(svc)
+      ? (svc as ServiceType)
+      : INITIAL.serviceType,
+    frequency: (FREQUENCY_VALUES as string[]).includes(freq)
+      ? (freq as Frequency)
+      : INITIAL.frequency,
+    bedrooms: clampRooms(prefill.bedrooms, INITIAL.bedrooms),
+    bathrooms: clampRooms(prefill.bathrooms, INITIAL.bathrooms),
+    requestedExtras: prefill.requestedExtras ?? INITIAL.requestedExtras,
+    fullName: prefill.fullName ?? INITIAL.fullName,
+    email: (prefill.email ?? INITIAL.email).toLowerCase(),
+    phone: prefill.phone ?? INITIAL.phone,
+    zipCode: prefill.zipCode ?? INITIAL.zipCode,
+    allergies: prefill.allergies ?? INITIAL.allergies,
+  };
+}
+
+// Primer paso aun incompleto, para no hacerle repetir lo que ya trajo del
+// landing. Normalmente cae en "Pick a date".
+function initialStep(d: FormShape): number {
+  const hasService = d.serviceType !== "";
+  const hasFreq = d.frequency !== "";
+  const hasContact =
+    d.fullName.trim() !== "" && EMAIL_RE.test(d.email.trim());
+  if (hasService && hasFreq && hasContact) return 4;
+  if (hasService && hasFreq) return 3;
+  if (hasService) return 1;
+  return 0;
+}
+
 // Fecha minima seleccionable: manana (no se reserva para hoy).
 function minBookingDate(): string {
   const d = new Date();
@@ -71,13 +131,17 @@ function minBookingDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function BookingForm() {
+export default function BookingForm({
+  prefill,
+}: {
+  prefill?: BookingPrefill | null;
+}) {
   const [state, formAction, pending] = useActionState<BookingState, FormData>(
     createBooking,
     null,
   );
-  const [step, setStep] = useState(0);
-  const [data, setData] = useState<FormShape>(INITIAL);
+  const [step, setStep] = useState(() => initialStep(buildInitial(prefill)));
+  const [data, setData] = useState<FormShape>(() => buildInitial(prefill));
   const [touchedNext, setTouchedNext] = useState(false);
 
   function update<K extends keyof FormShape>(key: K, value: FormShape[K]) {
