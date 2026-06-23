@@ -1,7 +1,18 @@
-# Fase 2: Pagos con Stripe (diseño)
+# Fase 2: Pagos con Stripe
 
-Estado: **no implementado**. Andamiaje seguro en `lib/stripe/index.ts`. Este
-documento es el plan para cuando Sage tenga su cuenta Stripe propia.
+Estado: **implementado y verificado en modo test.** Código en `lib/stripe/` y
+`app/api/stripe/webhook`. Falta solo configurar el webhook en producción y pasar
+a llaves live (ver abajo).
+
+## Lo que falta para ir a producción
+
+1. En el dashboard de Stripe: **Developers > Webhooks > Add endpoint**,
+   apuntando a `https://TU-DOMINIO/api/stripe/webhook`, suscribir el evento
+   `checkout.session.completed`. Copiar el secreto `whsec_...` a
+   `STRIPE_WEBHOOK_SECRET` (en Vercel).
+2. Probar con tarjeta de test `4242 4242 4242 4242` (cualquier fecha futura y
+   CVC): reservar, pagar, y confirmar que la reserva queda `confirmed`.
+3. Cuando todo funcione, cambiar `sk_test_`/`pk_test_` por las llaves `live`.
 
 ## Por qué todavía no
 

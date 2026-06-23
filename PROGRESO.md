@@ -37,7 +37,7 @@ npm run verify     # tests de precio y de la capa de datos
 | Fase | Qué es | Estado |
 |------|--------|--------|
 | 1 | Reservas guardadas (datos) | **Completa y funcionando con Supabase real.** |
-| 2 | Pagos con Stripe | **Estructura completa** (Checkout, guardado de tarjeta, cargo extra, webhook). Falta probar con llaves de TEST y luego pasar a live. Ver `docs/PHASE2-STRIPE.md`. |
+| 2 | Pagos con Stripe | **Funcionando y verificado** en modo test (Checkout crea el cobro; webhook confirma la reserva). Falta configurar el webhook en el dominio de producción y luego pasar a llaves live. Ver `docs/PHASE2-STRIPE.md`. |
 | 3 | Google Calendar | **Funcionando.** OAuth con la cuenta de Sage; el cliente elige fecha y se crea el evento. Ver `docs/PHASE3-GOOGLE.md`. |
 | 4 | Emails automáticos | **Funcionando** (los 3 emails + disparadores + cron + dedupe). En modo log hasta cargar `RESEND_API_KEY` y verificar el dominio del remitente. |
 | 5 | Leads abandonados | **Completa.** Captura + email de aviso a Sage. |
@@ -51,17 +51,19 @@ npm run verify     # tests de precio y de la capa de datos
 - Cambiá la contraseña editando `ADMIN_PASSWORD` en `.env.local` (y desplegando
   la variable en Vercel). El login se puede migrar a Supabase Auth más adelante.
 
-## Lo que falta, y depende de cuentas/llaves (no de código)
+## Lo que falta (todo es configuración de salida a producción, no código)
 
-1. **Pagos reales (Fase 2):** pasar las llaves de TEST de Stripe
-   (`pk_test_`/`sk_test_`) para probar, después las `pk_live_`/`sk_live_`.
-   Configurar el webhook en Stripe apuntando a `/api/stripe/webhook`.
-2. **Envío real de emails (Fase 4):** crear cuenta en Resend, verificar el
-   dominio `thesageessence.com`, y cargar `RESEND_API_KEY`. Hasta entonces los
-   emails se registran en consola (no se envían).
-3. **El estimador real:** `sage-essence-v7.html` no está en el repo. Los precios
+1. **Webhook de Stripe en producción:** en el dashboard de Stripe, crear un
+   endpoint apuntando a `https://TU-DOMINIO/api/stripe/webhook` (evento
+   `checkout.session.completed`), copiar el `whsec_...` a `STRIPE_WEBHOOK_SECRET`.
+   Después de probar, cambiar las llaves test por las `live`. La integración ya
+   está verificada (Checkout + webhook).
+2. **El estimador real:** `sage-essence-v7.html` no está en el repo. Los precios
    de `lib/pricing.ts` son provisorios (solo los descuentos por frecuencia son
    definitivos). Pasalo para replicar la fórmula exacta.
+
+Ya resuelto: Supabase conectado, Google Calendar autorizado, Resend con dominio
+verificado (emails reales), panel admin con contraseña.
 
 ## Deploy a Vercel (cuando quieras publicarlo)
 
