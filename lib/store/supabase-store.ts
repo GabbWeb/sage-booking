@@ -198,4 +198,25 @@ export class SupabaseStore implements DataStore {
       .eq("id", bookingId);
     if (error) throw error;
   }
+
+  async hasEmail(bookingId: string, emailType: string): Promise<boolean> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("email_log")
+      .select("id")
+      .eq("booking_id", bookingId)
+      .eq("email_type", emailType)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+
+  async logEmail(bookingId: string, emailType: string): Promise<void> {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("email_log")
+      .insert({ booking_id: bookingId, email_type: emailType });
+    if (error) throw error;
+  }
 }

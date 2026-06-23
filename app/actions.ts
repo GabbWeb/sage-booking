@@ -20,6 +20,7 @@ import {
   createCalendarEvent,
   defaultEndISO,
 } from "@/lib/google/calendar";
+import { sendBookingEmail, sendLeadNotification } from "@/lib/emails/dispatch";
 
 export type BookingState =
   | {
@@ -135,12 +136,16 @@ export async function createBooking(
     // Google Calendar (Fase 3). Si NO hay pago de por medio, creamos el evento
     // al reservar. Cuando Stripe este activo, el evento lo crea el webhook al
     // confirmarse el pago (asi no agendamos reservas no pagadas). Best effort.
-    if (!stripeConfigured() && googleCalendarConfigured()) {
-      try {
-        await syncBookingToCalendar({ bookingId, startISO, endISO });
-      } catch (calErr) {
-        console.error("[createBooking] calendario fallo:", calErr);
+    if (!stripeConfigured()) {
+      if (googleCalendarConfigured()) {
+        try {
+          await syncBookingToCalendar({ bookingId, startISO, endISO });
+        } catch (calErr) {
+          console.error("[createBooking] calendario fallo:", calErr);
+        }
       }
+      // Email de preparacion (Fase 4). Best effort.
+      await sendBookingEmail(store, bookingId, "prep");
     }
 
     // Pago con Stripe (Fase 2). Si no hay llaves, se omite y queda como hoy:
@@ -205,14 +210,16 @@ export async function saveAbandonedLead(payload: {
 
   try {
     const store = getStore();
-    await store.saveAbandonedLead({
+    const lead = {
       fullName: payload.fullName?.trim() || null,
       email: payload.email?.trim().toLowerCase() || null,
       phone: payload.phone?.trim() || null,
       zipCode: payload.zipCode?.trim() || null,
       lastStepReached: payload.lastStepReached || null,
-      partialData: payload.partialData ?? null,
-    });
+    };
+    await store.saveAbandonedLead({ ...lead, partialData: payload.partialData ?? null });
+    // Aviso a Sage para seguimiento manual (Fase 5). Best effort.
+    await sendLeadNotification(lead);
     return { ok: true };
   } catch (err) {
     console.error("[saveAbandonedLead] no se pudo guardar el lead:", err);

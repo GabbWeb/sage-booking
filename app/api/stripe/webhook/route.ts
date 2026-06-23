@@ -3,6 +3,7 @@ import { constructWebhookEvent } from "@/lib/stripe";
 import { getStore } from "@/lib/store";
 import { googleCalendarConfigured } from "@/lib/google/calendar";
 import { syncBookingToCalendar } from "@/app/actions";
+import { sendBookingEmail } from "@/lib/emails/dispatch";
 
 // Webhook de Stripe. Cuando un pago se completa, confirma la reserva. Verifica
 // la firma con STRIPE_WEBHOOK_SECRET usando el cuerpo crudo del request.
@@ -56,6 +57,9 @@ export async function POST(req: Request) {
             });
           }
         }
+
+        // Email de preparacion (Fase 4). Best effort, no duplica.
+        await sendBookingEmail(store, bookingId, "prep");
       }
     }
   } catch (err) {

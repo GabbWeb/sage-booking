@@ -107,4 +107,10 @@ export interface DataStore {
   // --- Google Calendar (Fase 3) ---
   /** Guarda el id del evento de Google Calendar en la reserva. */
   setBookingCalendarEvent(bookingId: string, eventId: string): Promise<void>;
+
+  // --- Emails (Fase 4) ---
+  /** True si ya se registro un email de ese tipo para la reserva. */
+  hasEmail(bookingId: string, emailType: string): Promise<boolean>;
+  /** Registra el envio de un email para no duplicar. */
+  logEmail(bookingId: string, emailType: string): Promise<void>;
 }

@@ -115,3 +115,21 @@ export async function createCalendarEvent(
   const json = (await res.json()) as { id: string };
   return json.id;
 }
+
+/** Borra un evento del calendario de Sage (best effort). */
+export async function deleteCalendarEvent(eventId: string): Promise<void> {
+  const calendarId = process.env.GOOGLE_CALENDAR_ID;
+  if (!calendarId) throw new Error("Falta GOOGLE_CALENDAR_ID.");
+  const token = await getAccessToken();
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+    calendarId,
+  )}/events/${encodeURIComponent(eventId)}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  // 410 = ya estaba borrado; lo tomamos como ok.
+  if (!res.ok && res.status !== 410 && res.status !== 404) {
+    throw new Error(`Google delete error ${res.status}: ${await res.text()}`);
+  }
+}

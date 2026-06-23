@@ -63,7 +63,19 @@ try {
   assert.equal(bookings[0].service_type, "deep");
   assert.equal(bookings[0].bedrooms, 3);
 
-  console.log("OK store: cliente, dedupe por email, reserva, lead y listado.");
+  // 6) email_log: dedupe por tipo
+  assert.equal(await store.hasEmail(bookingId, "prep"), false, "sin email aun");
+  await store.logEmail(bookingId, "prep");
+  assert.equal(await store.hasEmail(bookingId, "prep"), true, "prep registrado");
+  assert.equal(
+    await store.hasEmail(bookingId, "reminder_2days"),
+    false,
+    "otro tipo no cuenta",
+  );
+
+  console.log(
+    "OK store: cliente, dedupe email, reserva, lead, listado y email_log.",
+  );
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

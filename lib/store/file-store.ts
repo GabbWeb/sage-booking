@@ -243,4 +243,26 @@ export class FileStore implements DataStore {
       }
     });
   }
+
+  hasEmail(bookingId: string, emailType: string): Promise<boolean> {
+    return withLock(async () => {
+      const db = await readDb();
+      return db.email_log.some(
+        (e) => e.booking_id === bookingId && e.email_type === emailType,
+      );
+    });
+  }
+
+  logEmail(bookingId: string, emailType: string): Promise<void> {
+    return withLock(async () => {
+      const db = await readDb();
+      db.email_log.push({
+        id: randomUUID(),
+        booking_id: bookingId,
+        email_type: emailType,
+        sent_at: new Date().toISOString(),
+      });
+      await writeDb(db);
+    });
+  }
 }
