@@ -1,62 +1,68 @@
-# Fase 3: Google Calendar (diseño)
+# Fase 3: Google Calendar (OAuth)
 
-Estado: **estructura lista, sin credenciales**. Código en `lib/google/calendar.ts`
-(sin dependencias externas) y acción `syncBookingToCalendar` en `app/actions.ts`.
+Estado: **estructura lista, falta autorizar**. Código en `lib/google/` y acción
+`syncBookingToCalendar` en `app/actions.ts`.
+
+## Por qué OAuth y no service account
+
+La organización de Sage (thesageessence.com) tiene una política de seguridad que
+bloquea crear llaves de service account (`iam.disableServiceAccountKeyCreation`).
+OAuth queda dentro de la cuenta de Sage y no choca con esa política, sin depender
+del administrador de la organización.
 
 ## Objetivo
 
-Cuando Sage confirma una reserva con fecha y hora, crear automáticamente un
-evento en el Google Calendar del negocio, con el servicio, el cliente y las
-notas (alergias, extras, contacto). Guardar el `google_calendar_event_id` para
-poder actualizar o cancelar después.
+Cuando Sage confirma una reserva con fecha y hora, crear un evento en el Google
+Calendar del negocio (servicio, cliente, notas) y guardar el
+`google_calendar_event_id`.
 
-## Enfoque: service account (recomendado)
+## Setup
 
-Es lo más simple para que el servidor cree eventos solo, sin que haya un usuario
-presente ni manejo de refresh tokens.
+### 1. Crear el OAuth client (en Google Cloud, cuenta de Sage)
 
-### Setup (una vez)
+1. Habilitar la **Google Calendar API** (ya hecho).
+2. **APIs & Services > OAuth consent screen**: tipo **Internal** (es un Workspace),
+   completar nombre y email de soporte. Agregar el scope
+   `.../auth/calendar.events`.
+3. **APIs & Services > Credentials > Create credentials > OAuth client ID**:
+   - Tipo: **Web application**.
+   - **Authorized redirect URIs**: agregar
+     `http://localhost:3000/api/google/oauth/callback`
+     (y la URL de producción cuando se despliegue, ej.
+     `https://TU-DOMINIO/api/google/oauth/callback`).
+4. Copiar **Client ID** y **Client secret**.
 
-1. En **Google Cloud Console**, crear (o usar) un proyecto.
-2. Habilitar la **Google Calendar API**.
-3. Crear una **service account** y generar una **clave JSON**.
-4. Del JSON sacar `client_email` y `private_key`.
-5. En el **Google Calendar de Sage**, compartir el calendario con ese
-   `client_email`, con permiso **"Hacer cambios en los eventos"**.
-6. El `GOOGLE_CALENDAR_ID` suele ser el email del calendario (o `primary`).
+### 2. Cargar y autorizar
 
-### Variables (.env.local)
-
-```
-GOOGLE_SERVICE_ACCOUNT_EMAIL=...@...iam.gserviceaccount.com
-GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-GOOGLE_CALENDAR_ID=...@group.calendar.google.com
-```
-
-La `GOOGLE_PRIVATE_KEY` va entre comillas y con los saltos como `\n` literales
-(el código los normaliza).
+1. En `.env.local`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y
+   `GOOGLE_CALENDAR_ID` (el ID del calendario de Sage, de Configuración del
+   calendario).
+2. `npm run dev`, abrir **http://localhost:3000/api/google/oauth/start** logueado
+   con la cuenta de Sage, aceptar el consentimiento.
+3. La página de retorno muestra el **refresh token**: pegarlo en `.env.local`
+   como `GOOGLE_REFRESH_TOKEN` y reiniciar el server.
 
 ## Cómo funciona el código
 
-- `googleCalendarConfigured()` detecta si están las 3 variables.
-- `createCalendarEvent({ summary, description, location, startISO, endISO })`
-  firma un JWT de la service account con `node:crypto`, pide un access token y
-  hace POST a la REST API del calendario. Sin librerías externas.
+- `lib/google/oauth.ts`: arma la URL de consentimiento y canjea el code por
+  tokens (rutas `/api/google/oauth/start` y `/callback`, solo dev).
+- `lib/google/calendar.ts`: con el refresh token pide access tokens y crea
+  eventos por REST. Sin librerías externas.
 - `syncBookingToCalendar({ bookingId, startISO, endISO, location })` arma el
-  evento desde la reserva y el cliente, lo crea y guarda el id.
+  evento desde la reserva y el cliente y guarda el id.
 
 ## Falta para activarlo
 
-1. Cargar las credenciales de la service account (arriba).
-2. **Definir la fecha y hora de la reserva.** El formulario hoy no pide fecha;
-   la idea es que Sage la confirme desde el panel (Fase 6) y ahí se dispara
-   `syncBookingToCalendar`. Si se quiere que el cliente elija fecha al reservar,
-   hay que agregar ese paso al formulario.
+1. Crear el OAuth client y autorizar (arriba).
+2. **Definir la fecha y hora de la reserva.** El formulario hoy no la pide; la
+   idea es que Sage la confirme desde el panel (Fase 6) y ahí se dispara
+   `syncBookingToCalendar`.
 3. Probar con una reserva real contra el calendario de Sage.
 
 ## Notas
 
-- Zona horaria fijada en `America/Chicago` (Austin). Cambiar en
-  `lib/google/calendar.ts` si hiciera falta.
+- Zona horaria fijada en `America/Chicago` (Austin), en `lib/google/calendar.ts`.
 - La columna `google_calendar_event_id` ya existe en la migración
   `supabase/migrations/0001_init.sql`.
+- Consent screen **Internal** evita verificación de Google y da refresh tokens
+  durables.

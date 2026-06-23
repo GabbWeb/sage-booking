@@ -1,34 +1,25 @@
-import { createSign } from "node:crypto";
-
-// Integracion con Google Calendar (Fase 3) SIN dependencias externas: firma el
-// JWT de la service account con node:crypto y habla con la REST API por fetch.
+// Integracion con Google Calendar (Fase 3) por OAuth, SIN dependencias externas.
+// Usa un refresh token de la cuenta de Sage para pedir access tokens y habla con
+// la REST API por fetch. Elegimos OAuth (no service account) porque la org de
+// Sage bloquea la creacion de llaves de service account por politica.
 //
 // Setup (ver docs/PHASE3-GOOGLE.md):
-//  1. Crear una service account en Google Cloud, habilitar Calendar API.
-//  2. Compartir el calendario de Sage con el email de la service account
-//     (permiso "Hacer cambios en eventos").
-//  3. Cargar en .env.local: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY,
-//     GOOGLE_CALENDAR_ID.
+//  1. Crear un OAuth client (Web) en Google Cloud y configurar el consent screen.
+//  2. Autorizar una vez con la cuenta de Sage en /api/google/oauth/start para
+//     obtener el refresh token.
+//  3. Cargar en .env.local: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+//     GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID.
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const SCOPE = "https://www.googleapis.com/auth/calendar";
 const TIME_ZONE = "America/Chicago"; // Austin, TX
 
 export function googleCalendarConfigured(): boolean {
   return Boolean(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-      process.env.GOOGLE_PRIVATE_KEY &&
+    process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REFRESH_TOKEN &&
       process.env.GOOGLE_CALENDAR_ID,
   );
-}
-
-function base64url(input: string): string {
-  return Buffer.from(input).toString("base64url");
-}
-
-function getPrivateKey(): string {
-  // Las private keys en .env suelen venir con \n literales: los normalizamos.
-  return (process.env.GOOGLE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -38,33 +29,21 @@ async function getAccessToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  if (!email) throw new Error("Falta GOOGLE_SERVICE_ACCOUNT_EMAIL.");
-
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", typ: "JWT" };
-  const claim = {
-    iss: email,
-    scope: SCOPE,
-    aud: TOKEN_URL,
-    iat: now,
-    exp: now + 3600,
-  };
-
-  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(
-    JSON.stringify(claim),
-  )}`;
-  const signer = createSign("RSA-SHA256");
-  signer.update(signingInput);
-  const signature = signer.sign(getPrivateKey(), "base64url");
-  const assertion = `${signingInput}.${signature}`;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("Faltan credenciales de Google OAuth en .env.local.");
+  }
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
     }),
   });
   if (!res.ok) {
