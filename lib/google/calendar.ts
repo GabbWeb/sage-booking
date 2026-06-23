@@ -57,6 +57,24 @@ async function getAccessToken(): Promise<string> {
   return json.access_token;
 }
 
+// Toma la parte "wall clock" (sin zona) de un ISO, ya que las horas se
+// interpretan en TIME_ZONE. Asi un valor guardado como "...T10:00:00+00:00"
+// vuelve a "...T10:00:00" y Google lo agenda a las 10 hora de Austin.
+function toNaiveLocal(s: string): string {
+  const m = s.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2})?/);
+  if (!m) return s;
+  return `${m[1]}${m[2] ?? ":00"}`;
+}
+
+// Fin del evento = inicio + 2 horas, por manipulacion de string (evita lios de
+// zona horaria). startISO viene como "YYYY-MM-DDTHH:mm:ss".
+export function defaultEndISO(startISO: string): string {
+  const m = startISO.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return startISO;
+  const endHour = String(Math.min(23, Number(m[2]) + 2)).padStart(2, "0");
+  return `${m[1]}T${endHour}:${m[3]}:00`;
+}
+
 export type CalendarEvent = {
   summary: string;
   description?: string;
@@ -87,8 +105,8 @@ export async function createCalendarEvent(
       summary: event.summary,
       description: event.description,
       location: event.location,
-      start: { dateTime: event.startISO, timeZone: TIME_ZONE },
-      end: { dateTime: event.endISO, timeZone: TIME_ZONE },
+      start: { dateTime: toNaiveLocal(event.startISO), timeZone: TIME_ZONE },
+      end: { dateTime: toNaiveLocal(event.endISO), timeZone: TIME_ZONE },
     }),
   });
   if (!res.ok) {

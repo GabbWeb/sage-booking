@@ -22,6 +22,9 @@ export type BookingInput = {
   requestedExtras?: string | null;
   estimateLow: number;
   estimateHigh: number;
+  // Fecha y hora elegida por el cliente, naive ISO "YYYY-MM-DDTHH:mm:ss"
+  // interpretada en la zona del negocio (America/Chicago).
+  scheduledDate?: string | null;
 };
 
 export type LeadInput = {
@@ -43,6 +46,7 @@ export type StoredBooking = {
   requested_extras: string | null;
   estimate_low: number;
   estimate_high: number;
+  scheduled_date: string | null;
   final_amount: number | null;
   status: string;
   stripe_payment_intent_id: string | null;

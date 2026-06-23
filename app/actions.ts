@@ -15,6 +15,11 @@ import {
   ensureStripeCustomer,
   createCheckoutSession,
 } from "@/lib/stripe";
+import {
+  googleCalendarConfigured,
+  createCalendarEvent,
+  defaultEndISO,
+} from "@/lib/google/calendar";
 
 export type BookingState =
   | {
@@ -56,6 +61,8 @@ export async function createBooking(
   const bedrooms = Number(formData.get("bedrooms") ?? 0);
   const bathrooms = Number(formData.get("bathrooms") ?? 0);
   const requestedExtras = String(formData.get("requestedExtras") ?? "").trim();
+  const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
+  const scheduledTime = String(formData.get("scheduledTime") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "")
     .trim()
@@ -84,6 +91,16 @@ export async function createBooking(
   if (!Number.isFinite(bathrooms) || bathrooms < 0 || bathrooms > 20) {
     return { ok: false, error: "Bathrooms must be between 0 and 20." };
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+    return { ok: false, error: "Please choose a date." };
+  }
+  if (!/^\d{2}:\d{2}$/.test(scheduledTime)) {
+    return { ok: false, error: "Please choose a time." };
+  }
+
+  // Naive ISO en hora de Austin. La duracion por defecto es de 2 horas.
+  const startISO = `${scheduledDate}T${scheduledTime}:00`;
+  const endISO = defaultEndISO(startISO);
 
   const estimate = estimatePrice({
     serviceType: serviceType as ServiceType,
@@ -112,7 +129,19 @@ export async function createBooking(
       requestedExtras: requestedExtras || null,
       estimateLow: estimate.low,
       estimateHigh: estimate.high,
+      scheduledDate: startISO,
     });
+
+    // Google Calendar (Fase 3). Si NO hay pago de por medio, creamos el evento
+    // al reservar. Cuando Stripe este activo, el evento lo crea el webhook al
+    // confirmarse el pago (asi no agendamos reservas no pagadas). Best effort.
+    if (!stripeConfigured() && googleCalendarConfigured()) {
+      try {
+        await syncBookingToCalendar({ bookingId, startISO, endISO });
+      } catch (calErr) {
+        console.error("[createBooking] calendario fallo:", calErr);
+      }
+    }
 
     // Pago con Stripe (Fase 2). Si no hay llaves, se omite y queda como hoy:
     // la reserva pending sin pago (modo demo / pre-pagos).
@@ -258,18 +287,16 @@ export type CalendarSyncResult =
 export async function syncBookingToCalendar(input: {
   bookingId: string;
   startISO: string;
-  endISO: string;
+  endISO?: string;
   location?: string;
 }): Promise<CalendarSyncResult> {
-  const { googleCalendarConfigured, createCalendarEvent } = await import(
-    "@/lib/google/calendar"
-  );
   if (!googleCalendarConfigured()) {
     return { ok: false, error: "Google Calendar is not configured yet." };
   }
-  if (!input.startISO || !input.endISO) {
-    return { ok: false, error: "A start and end time are required." };
+  if (!input.startISO) {
+    return { ok: false, error: "A start time is required." };
   }
+  const endISO = input.endISO ?? defaultEndISO(input.startISO);
 
   try {
     const store = getStore();
@@ -296,7 +323,7 @@ export async function syncBookingToCalendar(input: {
       description: notes,
       location: input.location || c?.zip_code || undefined,
       startISO: input.startISO,
-      endISO: input.endISO,
+      endISO,
     });
 
     await store.setBookingCalendarEvent(input.bookingId, eventId);

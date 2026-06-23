@@ -1,6 +1,8 @@
 import type Stripe from "stripe";
 import { constructWebhookEvent } from "@/lib/stripe";
 import { getStore } from "@/lib/store";
+import { googleCalendarConfigured } from "@/lib/google/calendar";
+import { syncBookingToCalendar } from "@/app/actions";
 
 // Webhook de Stripe. Cuando un pago se completa, confirma la reserva. Verifica
 // la firma con STRIPE_WEBHOOK_SECRET usando el cuerpo crudo del request.
@@ -34,7 +36,8 @@ export async function POST(req: Request) {
             ? session.payment_intent
             : (session.payment_intent?.id ?? undefined);
 
-        await getStore().updateBookingPayment(bookingId, {
+        const store = getStore();
+        await store.updateBookingPayment(bookingId, {
           status: "confirmed",
           stripePaymentIntentId: paymentIntentId,
           finalAmount:
@@ -42,6 +45,17 @@ export async function POST(req: Request) {
               ? session.amount_total / 100
               : undefined,
         });
+
+        // Reserva pagada: ahora si la agendamos en el calendario.
+        if (googleCalendarConfigured()) {
+          const booking = await store.getBooking(bookingId);
+          if (booking?.scheduled_date) {
+            await syncBookingToCalendar({
+              bookingId,
+              startISO: booking.scheduled_date,
+            });
+          }
+        }
       }
     }
   } catch (err) {

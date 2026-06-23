@@ -121,6 +121,7 @@ export class FileStore implements DataStore {
         requested_extras: input.requestedExtras ?? null,
         estimate_low: input.estimateLow,
         estimate_high: input.estimateHigh,
+        scheduled_date: input.scheduledDate ?? null,
         final_amount: null,
         status: "pending",
         stripe_payment_intent_id: null,

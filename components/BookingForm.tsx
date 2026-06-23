@@ -18,6 +18,8 @@ type FormShape = {
   bedrooms: number;
   bathrooms: number;
   requestedExtras: string;
+  scheduledDate: string; // "YYYY-MM-DD"
+  scheduledTime: string; // "HH:mm"
   fullName: string;
   email: string;
   phone: string;
@@ -32,6 +34,8 @@ const INITIAL: FormShape = {
   bedrooms: 2,
   bathrooms: 1,
   requestedExtras: "",
+  scheduledDate: "",
+  scheduledTime: "",
   fullName: "",
   email: "",
   phone: "",
@@ -45,10 +49,27 @@ const STEP_TITLES = [
   "How often",
   "About your home",
   "Your details",
+  "Pick a date",
   "Review and request",
 ];
 
+// Horarios disponibles (hora de Austin). Cada limpieza dura unas 2 horas.
+const TIME_SLOTS: Array<{ value: string; label: string }> = [
+  { value: "08:00", label: "8:00 AM" },
+  { value: "10:00", label: "10:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "14:00", label: "2:00 PM" },
+  { value: "16:00", label: "4:00 PM" },
+];
+
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Fecha minima seleccionable: manana (no se reserva para hoy).
+function minBookingDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function BookingForm() {
   const [state, formAction, pending] = useActionState<BookingState, FormData>(
@@ -171,6 +192,12 @@ export default function BookingForm() {
         );
       case 3:
         return data.fullName.trim() !== "" && EMAIL_RE.test(data.email.trim());
+      case 4:
+        return (
+          data.scheduledDate !== "" &&
+          data.scheduledTime !== "" &&
+          data.scheduledDate >= minBookingDate()
+        );
       default:
         return true;
     }
@@ -255,6 +282,8 @@ export default function BookingForm() {
       <input type="hidden" name="bedrooms" value={data.bedrooms} />
       <input type="hidden" name="bathrooms" value={data.bathrooms} />
       <input type="hidden" name="requestedExtras" value={data.requestedExtras} />
+      <input type="hidden" name="scheduledDate" value={data.scheduledDate} />
+      <input type="hidden" name="scheduledTime" value={data.scheduledTime} />
       <input type="hidden" name="fullName" value={data.fullName} />
       <input type="hidden" name="email" value={data.email} />
       <input type="hidden" name="phone" value={data.phone} />
@@ -397,7 +426,47 @@ export default function BookingForm() {
             </div>
           )}
 
-          {step === 4 && <Review data={data} estimate={estimate} />}
+          {step === 4 && (
+            <div className="flex flex-col gap-6">
+              <p className="text-sm leading-relaxed text-sage-deep">
+                Pick a preferred day and time. We will confirm with you before
+                the visit. Each clean takes about two hours.
+              </p>
+              <Field label="Preferred date" required>
+                <input
+                  type="date"
+                  min={minBookingDate()}
+                  value={data.scheduledDate}
+                  onChange={(e) => update("scheduledDate", e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <div>
+                <span className="mb-2 block text-sm uppercase tracking-widest text-sage">
+                  Preferred time<span className="text-amber"> *</span>
+                </span>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {TIME_SLOTS.map((slot) => (
+                    <button
+                      key={slot.value}
+                      type="button"
+                      onClick={() => update("scheduledTime", slot.value)}
+                      aria-pressed={data.scheduledTime === slot.value}
+                      className={`rounded-lg border px-4 py-3 text-sm transition ${
+                        data.scheduledTime === slot.value
+                          ? "border-sage-deep bg-cream text-ink"
+                          : "border-sage/30 bg-paper text-sage-deep hover:border-sage"
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && <Review data={data} estimate={estimate} />}
         </div>
 
         {touchedNext && !stepIsValid(step) && (
@@ -586,10 +655,19 @@ function Review({
   data: FormShape;
   estimate: ReturnType<typeof estimatePrice> | null;
 }) {
+  const timeLabel =
+    TIME_SLOTS.find((s) => s.value === data.scheduledTime)?.label ??
+    data.scheduledTime;
+  const whenText =
+    data.scheduledDate && data.scheduledTime
+      ? `${data.scheduledDate} at ${timeLabel}`
+      : "Not set";
+
   const rows: Array<[string, string]> = [
     ["Clean", data.serviceType ? serviceLabel(data.serviceType) : "Not set"],
     ["Frequency", data.frequency ? frequencyLabel(data.frequency) : "Not set"],
     ["Home", `${data.bedrooms} bed, ${data.bathrooms} bath`],
+    ["When", whenText],
     ["Name", data.fullName || "Not set"],
     ["Email", data.email || "Not set"],
     ["Phone", data.phone || "Not provided"],

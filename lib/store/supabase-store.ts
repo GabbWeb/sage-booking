@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 const BOOKING_COLUMNS =
-  "id, customer_id, service_type, frequency, bedrooms, bathrooms, requested_extras, estimate_low, estimate_high, final_amount, status, stripe_payment_intent_id, google_calendar_event_id, created_at";
+  "id, customer_id, service_type, frequency, bedrooms, bathrooms, requested_extras, estimate_low, estimate_high, scheduled_date, final_amount, status, stripe_payment_intent_id, google_calendar_event_id, created_at";
 
 const CUSTOMER_COLUMNS =
   "id, email, full_name, phone, zip_code, allergies_sensitivities, stripe_customer_id";
@@ -76,6 +76,7 @@ export class SupabaseStore implements DataStore {
         requested_extras: input.requestedExtras ?? null,
         estimate_low: input.estimateLow,
         estimate_high: input.estimateHigh,
+        scheduled_date: input.scheduledDate ?? null,
         status: "pending",
       })
       .select("id")
