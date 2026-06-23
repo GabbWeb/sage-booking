@@ -20,14 +20,21 @@ Se construye por fases (ver `SPEC.md`); estado actual en `PROGRESO.md`.
 - Next.js 16 App Router + TypeScript + Tailwind v4 + Supabase.
 - Capa de datos: `lib/store/` con interfaz común y dos implementaciones,
   `SupabaseStore` (producción) y `FileStore` (`.data/`, demo sin cuenta). La
-  elige `getStore()` según haya llaves de Supabase. La Server Action no sabe
+  elige `getStore()` según haya llaves de Supabase. Las Server Actions no saben
   cuál usa.
-- Reservas: `app/actions.ts` (`createBooking`, `saveAbandonedLead`).
+- Patrón general: cada integración externa tiene un `xConfigured()` y cae a un
+  modo seguro si faltan llaves (store local, email a consola, sin pago). Así
+  todo el flujo corre sin cuentas.
+- Reservas y acciones: `app/actions.ts` (`createBooking`, `saveAbandonedLead`,
+  `addExtraChargeToBooking`, `syncBookingToCalendar`).
 - Precios: `lib/pricing.ts` (constantes PROVISORIAS, ver `PROGRESO.md`).
-- Emails (Fase 4): plantillas en `lib/emails/`, preview en `/dev/emails`. No
-  envían todavía.
-- Herramientas dev bajo `/dev` (no enlazadas al sitio, el endpoint de test se
-  apaga en producción).
+- Pagos (Fase 2): `lib/stripe/` (Checkout + cargo extra off_session), webhook en
+  `app/api/stripe/webhook`. Ver `docs/PHASE2-STRIPE.md`.
+- Calendar (Fase 3): `lib/google/` (OAuth, sin SDK). Ver `docs/PHASE3-GOOGLE.md`.
+- Emails (Fase 4): plantillas en `lib/emails/templates.ts`, envío en `send.ts`
+  (Resend o log), `dispatch.ts` con dedupe; crons en `app/api/cron/*`.
+- Panel admin (Fase 6): `/login` + `/admin` (auth por cookie en `lib/auth.ts`).
+- Herramientas dev bajo `/dev` (no enlazadas al sitio, se apagan en producción).
 
 ## Comandos
 

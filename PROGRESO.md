@@ -43,28 +43,35 @@ npm run verify     # tests de precio y de la capa de datos
 | 5 | Leads abandonados | **Completa.** Captura + email de aviso a Sage. |
 | 6 | Panel de administración | **Funcionando.** Login en `/login`, panel en `/admin`: reservas (filtro por estado), cargo extra, leads, export CSV de clientes. |
 
-## Lo único que falta para cerrar la Fase 1 de verdad
+## El panel de administración
 
-Conectar Supabase. Cuando tengas la **cuenta gratis de Sage** (recordá: una
-cuenta nueva tiene el primer proyecto en $0; el costo de antes era por reusar la
-org de la agencia):
+- Entrá a `/login` con la contraseña que está en `.env.local` (`ADMIN_PASSWORD`).
+- En `/admin` ves: reservas (filtrables por estado), botón de cargo extra por
+  reserva, leads abandonados, y export CSV de clientes para marketing.
+- Cambiá la contraseña editando `ADMIN_PASSWORD` en `.env.local` (y desplegando
+  la variable en Vercel). El login se puede migrar a Supabase Auth más adelante.
 
-1. Crear el proyecto en supabase.com.
-2. Correr `supabase/migrations/0001_init.sql` en el SQL Editor.
-3. Pegar las 3 llaves en `.env.local` (ver `.env.local.example`).
-4. `npm run dev` y hacer una reserva: ahora se guarda en Supabase, no en demo.
+## Lo que falta, y depende de cuentas/llaves (no de código)
 
-No hay que cambiar nada de código: el sistema detecta las llaves y cambia solo
-de modo demo a modo Supabase.
+1. **Pagos reales (Fase 2):** pasar las llaves de TEST de Stripe
+   (`pk_test_`/`sk_test_`) para probar, después las `pk_live_`/`sk_live_`.
+   Configurar el webhook en Stripe apuntando a `/api/stripe/webhook`.
+2. **Envío real de emails (Fase 4):** crear cuenta en Resend, verificar el
+   dominio `thesageessence.com`, y cargar `RESEND_API_KEY`. Hasta entonces los
+   emails se registran en consola (no se envían).
+3. **El estimador real:** `sage-essence-v7.html` no está en el repo. Los precios
+   de `lib/pricing.ts` son provisorios (solo los descuentos por frecuencia son
+   definitivos). Pasalo para replicar la fórmula exacta.
 
-## Pendiente de Katerina y Felipe (pedir cuanto antes)
+## Deploy a Vercel (cuando quieras publicarlo)
 
-- **Stripe** a nombre de Sage Essence LLC: necesita EIN y cuenta bancaria. La
-  verificación tarda días.
-- **El estimador real:** el archivo `sage-essence-v7.html` no está en el repo.
-  Los precios de `lib/pricing.ts` son provisorios (solo los descuentos por
-  frecuencia son los definitivos). Pasalo para replicar la fórmula exacta.
-- Acceso a la cuenta Google de Sage (Fase 3) y dominio para emails (Fase 4).
+1. Subir el repo a GitHub (a nombre de Sage) y conectar el proyecto en Vercel.
+2. Cargar en Vercel todas las variables de `.env.local` (Settings, Environment
+   Variables). Sin estas, cada fase cae a su modo seguro (demo / log / sin pago).
+3. Agregar el `redirect_uri` de producción en el OAuth client de Google
+   (`https://TU-DOMINIO/api/google/oauth/callback`) y re-autorizar.
+4. Apuntar el webhook de Stripe al dominio de producción.
+5. Los cron jobs de emails ya están en `vercel.json` (corren solos en Vercel).
 
 ## Notas técnicas
 
