@@ -80,6 +80,27 @@ export type ExtraChargeInput = {
   stripeChargeId?: string | null;
 };
 
+export type StoredLead = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  zip_code: string | null;
+  last_step_reached: string | null;
+  created_at: string;
+};
+
+export type StoredCustomer = {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  zip_code: string | null;
+  allergies_sensitivities: string | null;
+  marketing_opt_in: boolean;
+  created_at: string;
+};
+
 export interface DataStore {
   readonly mode: StoreMode;
   /** Devuelve el id del cliente, creandolo si no existe (match por email). */
@@ -113,4 +134,10 @@ export interface DataStore {
   hasEmail(bookingId: string, emailType: string): Promise<boolean>;
   /** Registra el envio de un email para no duplicar. */
   logEmail(bookingId: string, emailType: string): Promise<void>;
+
+  // --- Panel admin (Fase 6) ---
+  /** Leads abandonados, mas recientes primero. */
+  listAbandonedLeads(limit?: number): Promise<StoredLead[]>;
+  /** Clientes (CRM), mas recientes primero. */
+  listCustomers(limit?: number): Promise<StoredCustomer[]>;
 }

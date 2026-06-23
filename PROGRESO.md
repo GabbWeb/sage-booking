@@ -38,10 +38,10 @@ npm run verify     # tests de precio y de la capa de datos
 |------|--------|--------|
 | 1 | Reservas guardadas (datos) | **Completa y funcionando con Supabase real.** |
 | 2 | Pagos con Stripe | **Estructura completa** (Checkout, guardado de tarjeta, cargo extra, webhook). Falta probar con llaves de TEST y luego pasar a live. Ver `docs/PHASE2-STRIPE.md`. |
-| 3 | Google Calendar | **Estructura lista** (módulo sin dependencias + acción `syncBookingToCalendar`). Falta credenciales de service account y definir la fecha de la reserva. Ver `docs/PHASE3-GOOGLE.md`. |
-| 4 | Emails automáticos | Plantillas y preview **listos**. Falta el envío real (Resend) y los disparadores. |
-| 5 | Leads abandonados | **Captura implementada y testeada.** Falta el email de aviso a Sage (depende de Fase 4). |
-| 6 | Panel de administración | Base lista: `/dev/bookings` es un visor read-only. Falta login y acciones (cargo extra, confirmar fecha). |
+| 3 | Google Calendar | **Funcionando.** OAuth con la cuenta de Sage; el cliente elige fecha y se crea el evento. Ver `docs/PHASE3-GOOGLE.md`. |
+| 4 | Emails automáticos | **Funcionando** (los 3 emails + disparadores + cron + dedupe). En modo log hasta cargar `RESEND_API_KEY` y verificar el dominio del remitente. |
+| 5 | Leads abandonados | **Completa.** Captura + email de aviso a Sage. |
+| 6 | Panel de administración | **Funcionando.** Login en `/login`, panel en `/admin`: reservas (filtro por estado), cargo extra, leads, export CSV de clientes. |
 
 ## Lo único que falta para cerrar la Fase 1 de verdad
 

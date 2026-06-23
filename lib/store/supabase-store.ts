@@ -8,6 +8,8 @@ import type {
   ExtraChargeInput,
   LeadInput,
   StoredBooking,
+  StoredCustomer,
+  StoredLead,
 } from "./types";
 
 const BOOKING_COLUMNS =
@@ -218,5 +220,29 @@ export class SupabaseStore implements DataStore {
       .from("email_log")
       .insert({ booking_id: bookingId, email_type: emailType });
     if (error) throw error;
+  }
+
+  async listAbandonedLeads(limit = 100): Promise<StoredLead[]> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("abandoned_leads")
+      .select("id, full_name, email, phone, zip_code, last_step_reached, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []) as StoredLead[];
+  }
+
+  async listCustomers(limit = 1000): Promise<StoredCustomer[]> {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("customers")
+      .select(
+        "id, full_name, email, phone, zip_code, allergies_sensitivities, marketing_opt_in, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []) as StoredCustomer[];
   }
 }

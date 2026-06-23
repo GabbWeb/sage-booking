@@ -10,6 +10,8 @@ import type {
   ExtraChargeInput,
   LeadInput,
   StoredBooking,
+  StoredCustomer,
+  StoredLead,
 } from "./types";
 
 // Store de DESARROLLO: persiste en .data/db.json (gitignored). Permite probar
@@ -263,6 +265,26 @@ export class FileStore implements DataStore {
         sent_at: new Date().toISOString(),
       });
       await writeDb(db);
+    });
+  }
+
+  listAbandonedLeads(limit = 100): Promise<StoredLead[]> {
+    return withLock(async () => {
+      const db = await readDb();
+      return [...db.abandoned_leads]
+        .sort((a, b) =>
+          String(b.created_at).localeCompare(String(a.created_at)),
+        )
+        .slice(0, limit) as unknown as StoredLead[];
+    });
+  }
+
+  listCustomers(limit = 1000): Promise<StoredCustomer[]> {
+    return withLock(async () => {
+      const db = await readDb();
+      return [...db.customers]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, limit) as StoredCustomer[];
     });
   }
 }
