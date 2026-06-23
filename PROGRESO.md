@@ -1,7 +1,16 @@
 # Progreso del Sistema de Reservas, Sage Essence
 
-Última actualización: 2026-06-21. Resumen de lo construido y lo que sigue.
+Última actualización: 2026-06-23. Resumen de lo construido y lo que sigue.
 Para el detalle técnico de cada fase, ver `SPEC.md`.
+
+## EN VIVO
+
+- **Sitio:** https://sage-booking.vercel.app
+- **Panel admin:** https://sage-booking.vercel.app/login (contraseña en `.env.local`, `ADMIN_PASSWORD`)
+- Desplegado en Vercel (cuenta `gabbweb`, proyecto `gabbwebs-projects/sage-booking`),
+  plan gratis. Las 15 variables de entorno cargadas. Webhook de Stripe (test)
+  configurado y activo. Crons de emails corriendo por `vercel.json`.
+- Las 6 fases funcionando. Stripe en modo TEST (falta pasar a live).
 
 ## Cómo verlo funcionando ahora mismo (sin cuentas ni costo)
 
@@ -65,15 +74,25 @@ npm run verify     # tests de precio y de la capa de datos
 Ya resuelto: Supabase conectado, Google Calendar autorizado, Resend con dominio
 verificado (emails reales), panel admin con contraseña.
 
-## Deploy a Vercel (cuando quieras publicarlo)
+## Deploy (ya hecho)
 
-1. Subir el repo a GitHub (a nombre de Sage) y conectar el proyecto en Vercel.
-2. Cargar en Vercel todas las variables de `.env.local` (Settings, Environment
-   Variables). Sin estas, cada fase cae a su modo seguro (demo / log / sin pago).
-3. Agregar el `redirect_uri` de producción en el OAuth client de Google
-   (`https://TU-DOMINIO/api/google/oauth/callback`) y re-autorizar.
-4. Apuntar el webhook de Stripe al dominio de producción.
-5. Los cron jobs de emails ya están en `vercel.json` (corren solos en Vercel).
+Ya está desplegado en Vercel con todas las variables y el webhook de Stripe.
+Para futuras actualizaciones: `git push` no aplica (no hay remoto); se redepliega
+con `vercel --prod` desde la carpeta, o conectando el repo a GitHub + Vercel.
+
+Pendiente de deploy, menor: agregar el `redirect_uri` de producción en el OAuth
+client de Google (`https://sage-booking.vercel.app/api/google/oauth/callback`)
+por si alguna vez hay que re-autorizar el calendario (hoy funciona con el token
+existente).
+
+## La última prueba (la hacés vos, 2 minutos)
+
+Para ver el flujo de pago completo en vivo:
+1. Entrá a https://sage-booking.vercel.app y hacé una reserva.
+2. En la pantalla de pago de Stripe, usá la tarjeta de prueba
+   **4242 4242 4242 4242**, cualquier fecha futura, cualquier CVC y código postal.
+3. Deberías volver a la pantalla de "gracias", recibir el email de preparación,
+   y ver la reserva como `confirmed` en `/admin` y un evento en el calendario.
 
 ## Notas técnicas
 
