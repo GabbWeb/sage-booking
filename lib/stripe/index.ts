@@ -80,6 +80,47 @@ export async function createCheckoutSession(params: {
 }
 
 /**
+ * Crea una Checkout Session para un cargo extra que el cliente aprueba y paga el
+ * mismo (menos invasivo que cobrarle la tarjeta guardada). Devuelve la URL del
+ * link de pago para enviarselo. El cargo se registra recien cuando paga, via el
+ * webhook (metadata.kind = "extra").
+ */
+export async function createExtraChargeCheckout(params: {
+  bookingId: string;
+  stripeCustomerId: string;
+  amountCents: number;
+  description: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ id: string; url: string | null }> {
+  const stripe = getStripe();
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer: params.stripeCustomerId,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: params.amountCents,
+          product_data: { name: params.description },
+        },
+      },
+    ],
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+    client_reference_id: params.bookingId,
+    metadata: {
+      bookingId: params.bookingId,
+      kind: "extra",
+      extraDescription: params.description,
+      extraAmount: String(params.amountCents / 100),
+    },
+  });
+  return { id: session.id, url: session.url };
+}
+
+/**
  * Cobra un monto sobre la tarjeta guardada del cliente, sin que este presente
  * (el "cargo extra despues"). Devuelve el id del PaymentIntent/charge.
  */

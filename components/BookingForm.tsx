@@ -133,9 +133,15 @@ function minBookingDate(): string {
 
 export default function BookingForm({
   prefill,
+  takenSlots,
 }: {
   prefill?: BookingPrefill | null;
+  takenSlots?: string[];
 }) {
+  // Horarios ya ocupados (formato "YYYY-MM-DDTHH:mm"), para no dejar elegirlos.
+  const takenSet = useMemo(() => new Set(takenSlots ?? []), [takenSlots]);
+  const isSlotTaken = (date: string, time: string) =>
+    date !== "" && takenSet.has(`${date}T${time}`);
   const [state, formAction, pending] = useActionState<BookingState, FormData>(
     createBooking,
     null,
@@ -260,7 +266,8 @@ export default function BookingForm({
         return (
           data.scheduledDate !== "" &&
           data.scheduledTime !== "" &&
-          data.scheduledDate >= minBookingDate()
+          data.scheduledDate >= minBookingDate() &&
+          !isSlotTaken(data.scheduledDate, data.scheduledTime)
         );
       default:
         return true;
@@ -510,22 +517,42 @@ export default function BookingForm({
                   Preferred time<span className="text-amber"> *</span>
                 </span>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {TIME_SLOTS.map((slot) => (
-                    <button
-                      key={slot.value}
-                      type="button"
-                      onClick={() => update("scheduledTime", slot.value)}
-                      aria-pressed={data.scheduledTime === slot.value}
-                      className={`rounded-lg border px-4 py-3 text-sm transition ${
-                        data.scheduledTime === slot.value
-                          ? "border-sage-deep bg-cream text-ink"
-                          : "border-sage/30 bg-paper text-sage-deep hover:border-sage"
-                      }`}
-                    >
-                      {slot.label}
-                    </button>
-                  ))}
+                  {TIME_SLOTS.map((slot) => {
+                    const taken = isSlotTaken(data.scheduledDate, slot.value);
+                    const selected = data.scheduledTime === slot.value;
+                    return (
+                      <button
+                        key={slot.value}
+                        type="button"
+                        disabled={taken}
+                        onClick={() => update("scheduledTime", slot.value)}
+                        aria-pressed={selected}
+                        className={`rounded-lg border px-4 py-3 text-sm transition ${
+                          taken
+                            ? "cursor-not-allowed border-sage/20 bg-cream/60 text-sage/50 line-through"
+                            : selected
+                              ? "border-sage-deep bg-cream text-ink"
+                              : "border-sage/30 bg-paper text-sage-deep hover:border-sage"
+                        }`}
+                      >
+                        {slot.label}
+                        {taken && (
+                          <span className="ml-1 text-xs no-underline">
+                            (taken)
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {data.scheduledDate !== "" &&
+                  TIME_SLOTS.every((s) =>
+                    isSlotTaken(data.scheduledDate, s.value),
+                  ) && (
+                    <p className="mt-2 text-sm text-amber">
+                      All times are booked for this day. Please pick another date.
+                    </p>
+                  )}
               </div>
             </div>
           )}

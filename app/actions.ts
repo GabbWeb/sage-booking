@@ -113,6 +113,22 @@ export async function createBooking(
   try {
     const store = getStore();
 
+    // Evitar superposicion: si ya hay una reserva confirmada (pagada) en ese
+    // horario, no se puede tomar de nuevo. Las pendientes no bloquean.
+    const slotKey = startISO.slice(0, 16); // YYYY-MM-DDTHH:mm
+    const existing = await store.listBookings(500);
+    const slotTaken = existing.some(
+      (b) =>
+        b.status === "confirmed" &&
+        (b.scheduled_date ?? "").slice(0, 16) === slotKey,
+    );
+    if (slotTaken) {
+      return {
+        ok: false,
+        error: "That time was just booked. Please choose another time.",
+      };
+    }
+
     const customerId = await store.findOrCreateCustomer({
       fullName,
       email,
@@ -235,9 +251,12 @@ export async function saveAbandonedLead(payload: {
 // autenticacion (solo Katerina/Felipe).
 // ---------------------------------------------------------------------------
 export type ExtraChargeResult =
-  | { ok: true; chargeId: string; paymentIntentId: string }
+  | { ok: true; url: string }
   | { ok: false; error: string };
 
+// Genera un link de pago para un cargo extra. El cliente lo aprueba y paga el
+// mismo (menos invasivo que cobrarle la tarjeta guardada). El cargo se registra
+// recien cuando paga, via el webhook de Stripe.
 export async function addExtraChargeToBooking(input: {
   bookingId: string;
   description: string;
@@ -249,35 +268,42 @@ export async function addExtraChargeToBooking(input: {
     return { ok: false, error: "Amount must be greater than zero." };
   }
   if (!stripeConfigured()) {
-    return { ok: false, error: "Stripe is not configured yet (Phase 2)." };
+    return { ok: false, error: "Payments are not active yet." };
   }
 
   try {
-    const { chargeSavedCard } = await import("@/lib/stripe");
+    const { createExtraChargeCheckout } = await import("@/lib/stripe");
     const store = getStore();
     const booking = await store.getBooking(input.bookingId);
     if (!booking) return { ok: false, error: "Booking not found." };
-    if (!booking.customer?.stripe_customer_id) {
-      return { ok: false, error: "This customer has no saved card." };
+    if (!booking.customer?.email) {
+      return { ok: false, error: "This booking has no customer email." };
     }
 
-    const amountCents = Math.round(input.amountUsd * 100);
-    const paymentIntentId = await chargeSavedCard({
-      stripeCustomerId: booking.customer.stripe_customer_id,
-      amountCents,
-      description,
+    // Asocia el pago al cliente (crea el Stripe Customer si hace falta).
+    const stripeCustomerId = await ensureStripeCustomer({
+      existingId: booking.customer.stripe_customer_id ?? null,
+      email: booking.customer.email,
+      name: booking.customer.full_name,
     });
+    if (stripeCustomerId !== booking.customer.stripe_customer_id) {
+      await store.setCustomerStripeId(booking.customer.id, stripeCustomerId);
+    }
 
-    const chargeId = await store.addExtraCharge(input.bookingId, {
+    const origin = await siteOrigin();
+    const { url } = await createExtraChargeCheckout({
+      bookingId: input.bookingId,
+      stripeCustomerId,
+      amountCents: Math.round(input.amountUsd * 100),
       description,
-      amount: input.amountUsd,
-      stripeChargeId: paymentIntentId,
+      successUrl: `${origin}/booking/success?paid=extra`,
+      cancelUrl: `${origin}/booking/success?paid=cancel`,
     });
-
-    return { ok: true, chargeId, paymentIntentId };
+    if (!url) return { ok: false, error: "Could not create the payment link." };
+    return { ok: true, url };
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Could not charge the card.";
+      err instanceof Error ? err.message : "Could not create the payment link.";
     return { ok: false, error: message };
   }
 }

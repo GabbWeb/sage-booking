@@ -38,28 +38,42 @@ export async function POST(req: Request) {
             : (session.payment_intent?.id ?? undefined);
 
         const store = getStore();
-        await store.updateBookingPayment(bookingId, {
-          status: "confirmed",
-          stripePaymentIntentId: paymentIntentId,
-          finalAmount:
-            session.amount_total != null
-              ? session.amount_total / 100
-              : undefined,
-        });
 
-        // Reserva pagada: ahora si la agendamos en el calendario.
-        if (googleCalendarConfigured()) {
-          const booking = await store.getBooking(bookingId);
-          if (booking?.scheduled_date) {
-            await syncBookingToCalendar({
-              bookingId,
-              startISO: booking.scheduled_date,
-            });
+        if (session.metadata?.kind === "extra") {
+          // Cargo extra pagado por el cliente (link de pago): lo registramos en
+          // la reserva, sin tocar su estado ni el pago principal.
+          await store.addExtraCharge(bookingId, {
+            description: session.metadata.extraDescription ?? "Extra charge",
+            amount:
+              session.amount_total != null
+                ? session.amount_total / 100
+                : Number(session.metadata.extraAmount ?? 0),
+            stripeChargeId: paymentIntentId ?? null,
+          });
+        } else {
+          await store.updateBookingPayment(bookingId, {
+            status: "confirmed",
+            stripePaymentIntentId: paymentIntentId,
+            finalAmount:
+              session.amount_total != null
+                ? session.amount_total / 100
+                : undefined,
+          });
+
+          // Reserva pagada: ahora si la agendamos en el calendario.
+          if (googleCalendarConfigured()) {
+            const booking = await store.getBooking(bookingId);
+            if (booking?.scheduled_date) {
+              await syncBookingToCalendar({
+                bookingId,
+                startISO: booking.scheduled_date,
+              });
+            }
           }
-        }
 
-        // Email de preparacion (Fase 4). Best effort, no duplica.
-        await sendBookingEmail(store, bookingId, "prep");
+          // Email de preparacion (Fase 4). Best effort, no duplica.
+          await sendBookingEmail(store, bookingId, "prep");
+        }
       }
     }
   } catch (err) {

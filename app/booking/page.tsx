@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import BookingForm, { type BookingPrefill } from "@/components/BookingForm";
+import { getStore } from "@/lib/store";
 
 export const metadata: Metadata = {
   title: "Book a Clean | Sage Essence",
@@ -26,6 +27,18 @@ export default async function Booking({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
+
+  // Horarios ya ocupados por reservas confirmadas (pagadas), para no ofrecerlos
+  // y evitar superposicion. Formato "YYYY-MM-DDTHH:mm".
+  let takenSlots: string[] = [];
+  try {
+    const bookings = await getStore().listBookings(500);
+    takenSlots = bookings
+      .filter((b) => b.status === "confirmed" && b.scheduled_date)
+      .map((b) => (b.scheduled_date as string).slice(0, 16));
+  } catch {
+    takenSlots = [];
+  }
 
   // Handoff desde el landing: viene con ?prefill=1 y los datos ya elegidos.
   const prefill: BookingPrefill | null =
@@ -60,7 +73,7 @@ export default async function Booking({
       </header>
 
       <section className="rounded-2xl border border-sage/20 bg-paper p-6 shadow-sm sm:p-9">
-        <BookingForm prefill={prefill} />
+        <BookingForm prefill={prefill} takenSlots={takenSlots} />
       </section>
 
       <footer className="mt-10 text-center text-xs uppercase tracking-widest text-sage">
