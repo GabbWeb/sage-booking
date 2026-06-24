@@ -48,6 +48,11 @@ export default async function Booking({
           frequency: one(sp.frequency),
           bedrooms: toNum(sp.bedrooms),
           bathrooms: toNum(sp.bathrooms),
+          squareFeet: toNum(sp.squareFeet),
+          addOns: (one(sp.addOns) ?? "")
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean),
           requestedExtras: one(sp.requestedExtras),
           fullName: one(sp.fullName),
           email: one(sp.email),

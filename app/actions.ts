@@ -6,6 +6,9 @@ import { estimatePrice } from "@/lib/pricing";
 import {
   SERVICE_VALUES,
   FREQUENCY_VALUES,
+  ADD_ON_VALUES,
+  addOnsTotal,
+  addOnLabel,
   serviceLabel,
   type ServiceType,
   type Frequency,
@@ -61,7 +64,13 @@ export async function createBooking(
   const frequency = String(formData.get("frequency") ?? "");
   const bedrooms = Number(formData.get("bedrooms") ?? 0);
   const bathrooms = Number(formData.get("bathrooms") ?? 0);
-  const requestedExtras = String(formData.get("requestedExtras") ?? "").trim();
+  const squareFeet = Number(formData.get("squareFeet") ?? 0);
+  // Adicionales elegidos: lista separada por comas, validada contra el catalogo.
+  const selectedAddOns = String(formData.get("addOns") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => ADD_ON_VALUES.includes(v));
+  const extrasNote = String(formData.get("requestedExtras") ?? "").trim();
   const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
   const scheduledTime = String(formData.get("scheduledTime") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
@@ -92,6 +101,9 @@ export async function createBooking(
   if (!Number.isFinite(bathrooms) || bathrooms < 0 || bathrooms > 20) {
     return { ok: false, error: "Bathrooms must be between 0 and 20." };
   }
+  if (squareFeet && (squareFeet < 100 || squareFeet > 15000)) {
+    return { ok: false, error: "Square footage looks off. Please check it." };
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
     return { ok: false, error: "Please choose a date." };
   }
@@ -108,7 +120,18 @@ export async function createBooking(
     frequency: frequency as Frequency,
     bedrooms,
     bathrooms,
+    squareFeet,
+    addOnsUsd: addOnsTotal(selectedAddOns),
   });
+
+  // Texto de extras para el panel: adicionales elegidos + nota libre.
+  const requestedExtras =
+    [
+      selectedAddOns.map(addOnLabel).join(", "),
+      extrasNote ? `Notes: ${extrasNote}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "";
 
   try {
     const store = getStore();

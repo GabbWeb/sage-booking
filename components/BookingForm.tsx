@@ -7,6 +7,10 @@ import {
   FREQUENCIES,
   SERVICE_VALUES,
   FREQUENCY_VALUES,
+  ADD_ONS,
+  ADD_ON_VALUES,
+  addOnsTotal,
+  addOnLabel,
   serviceLabel,
   frequencyLabel,
   type ServiceType,
@@ -19,6 +23,8 @@ type FormShape = {
   frequency: Frequency | "";
   bedrooms: number;
   bathrooms: number;
+  squareFeet: number;
+  addOns: string[];
   requestedExtras: string;
   scheduledDate: string; // "YYYY-MM-DD"
   scheduledTime: string; // "HH:mm"
@@ -35,6 +41,8 @@ const INITIAL: FormShape = {
   frequency: "",
   bedrooms: 2,
   bathrooms: 1,
+  squareFeet: 1200,
+  addOns: [],
   requestedExtras: "",
   scheduledDate: "",
   scheduledTime: "",
@@ -73,6 +81,8 @@ export type BookingPrefill = {
   frequency?: string;
   bedrooms?: number;
   bathrooms?: number;
+  squareFeet?: number;
+  addOns?: string[];
   requestedExtras?: string;
   fullName?: string;
   email?: string;
@@ -84,6 +94,12 @@ export type BookingPrefill = {
 function clampRooms(n: number | undefined, fallback: number): number {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 20
     ? n
+    : fallback;
+}
+
+function clampSqft(n: number | undefined, fallback: number): number {
+  return typeof n === "number" && Number.isFinite(n) && n >= 100 && n <= 15000
+    ? Math.round(n)
     : fallback;
 }
 
@@ -102,6 +118,8 @@ function buildInitial(prefill?: BookingPrefill | null): FormShape {
       : INITIAL.frequency,
     bedrooms: clampRooms(prefill.bedrooms, INITIAL.bedrooms),
     bathrooms: clampRooms(prefill.bathrooms, INITIAL.bathrooms),
+    squareFeet: clampSqft(prefill.squareFeet, INITIAL.squareFeet),
+    addOns: (prefill.addOns ?? []).filter((v) => ADD_ON_VALUES.includes(v)),
     requestedExtras: prefill.requestedExtras ?? INITIAL.requestedExtras,
     fullName: prefill.fullName ?? INITIAL.fullName,
     email: (prefill.email ?? INITIAL.email).toLowerCase(),
@@ -154,6 +172,15 @@ export default function BookingForm({
     setData((d) => ({ ...d, [key]: value }));
   }
 
+  function toggleAddOn(value: string) {
+    setData((d) => ({
+      ...d,
+      addOns: d.addOns.includes(value)
+        ? d.addOns.filter((v) => v !== value)
+        : [...d.addOns, value],
+    }));
+  }
+
   const estimate = useMemo(() => {
     if (!data.serviceType || !data.frequency) return null;
     return estimatePrice({
@@ -161,8 +188,17 @@ export default function BookingForm({
       frequency: data.frequency,
       bedrooms: data.bedrooms,
       bathrooms: data.bathrooms,
+      squareFeet: data.squareFeet,
+      addOnsUsd: addOnsTotal(data.addOns),
     });
-  }, [data.serviceType, data.frequency, data.bedrooms, data.bathrooms]);
+  }, [
+    data.serviceType,
+    data.frequency,
+    data.bedrooms,
+    data.bathrooms,
+    data.squareFeet,
+    data.addOns,
+  ]);
 
   // ---- Captura de leads abandonados (requerimiento de Katerina) ----
   // Si el visitante dejo datos de contacto y abandona sin terminar, guardamos
@@ -352,6 +388,8 @@ export default function BookingForm({
       <input type="hidden" name="frequency" value={data.frequency} />
       <input type="hidden" name="bedrooms" value={data.bedrooms} />
       <input type="hidden" name="bathrooms" value={data.bathrooms} />
+      <input type="hidden" name="squareFeet" value={data.squareFeet} />
+      <input type="hidden" name="addOns" value={data.addOns.join(",")} />
       <input type="hidden" name="requestedExtras" value={data.requestedExtras} />
       <input type="hidden" name="scheduledDate" value={data.scheduledDate} />
       <input type="hidden" name="scheduledTime" value={data.scheduledTime} />
@@ -424,12 +462,68 @@ export default function BookingForm({
                   onChange={(v) => update("bathrooms", v)}
                 />
               </div>
-              <Field label="Anything extra? (optional)">
+
+              {/* Pies cuadrados aproximados (mueve el grueso del precio). */}
+              <div>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="text-sm uppercase tracking-widest text-sage">
+                    Approx. square feet
+                  </span>
+                  <span className="font-display text-xl text-ink">
+                    {data.squareFeet.toLocaleString("en-US")}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={500}
+                  max={4000}
+                  step={50}
+                  value={data.squareFeet}
+                  onChange={(e) => update("squareFeet", Number(e.target.value))}
+                  className="w-full accent-sage-deep"
+                />
+                <div className="mt-1 flex justify-between text-xs text-sage">
+                  <span>500</span>
+                  <span>4,000+</span>
+                </div>
+              </div>
+
+              {/* Adicionales: se suman al precio automaticamente. */}
+              <div>
+                <span className="mb-2 block text-sm uppercase tracking-widest text-sage">
+                  Add-ons (optional)
+                </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {ADD_ONS.map((a) => {
+                    const on = data.addOns.includes(a.value);
+                    return (
+                      <button
+                        key={a.value}
+                        type="button"
+                        onClick={() => toggleAddOn(a.value)}
+                        aria-pressed={on}
+                        className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition ${
+                          on
+                            ? "border-sage-deep bg-cream text-ink"
+                            : "border-sage/30 bg-paper text-sage-deep hover:border-sage"
+                        }`}
+                      >
+                        <span>{a.label}</span>
+                        <span className="ml-2 shrink-0 text-amber">
+                          +{formatUsd(a.price)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <Field label="Anything else? (optional)">
                 <textarea
                   value={data.requestedExtras}
                   onChange={(e) => update("requestedExtras", e.target.value)}
-                  rows={3}
-                  placeholder="Inside the fridge, inside the oven, interior windows..."
+                  rows={2}
+                  placeholder="Blinds detail, interior walls, special instructions..."
                   className={inputClass}
                 />
               </Field>
@@ -757,14 +851,22 @@ function Review({
   const rows: Array<[string, string]> = [
     ["Clean", data.serviceType ? serviceLabel(data.serviceType) : "Not set"],
     ["Frequency", data.frequency ? frequencyLabel(data.frequency) : "Not set"],
-    ["Home", `${data.bedrooms} bed, ${data.bathrooms} bath`],
+    [
+      "Home",
+      `${data.bedrooms} bed, ${data.bathrooms} bath, ${data.squareFeet.toLocaleString(
+        "en-US",
+      )} sq ft`,
+    ],
     ["When", whenText],
     ["Name", data.fullName || "Not set"],
     ["Email", data.email || "Not set"],
     ["Phone", data.phone || "Not provided"],
     ["Zip", data.zipCode || "Not provided"],
   ];
-  if (data.requestedExtras) rows.push(["Extras", data.requestedExtras]);
+  if (data.addOns.length > 0) {
+    rows.push(["Add-ons", data.addOns.map(addOnLabel).join(", ")]);
+  }
+  if (data.requestedExtras) rows.push(["Notes", data.requestedExtras]);
   if (data.allergies) rows.push(["Sensitivities", data.allergies]);
 
   return (
