@@ -45,10 +45,14 @@ export const FREQUENCY_VALUES = FREQUENCIES.map((f) => f.value);
 export const ADD_ONS = [
   { value: "oven", label: "Inside the oven", price: 30 },
   { value: "fridge", label: "Inside the fridge", price: 30 },
+  { value: "dishwasher", label: "Inside the dishwasher", price: 25 },
   { value: "windows", label: "Interior windows", price: 45 },
   { value: "cabinets", label: "Inside kitchen cabinets", price: 40 },
   { value: "laundry", label: "Laundry, wash and fold", price: 25 },
+  { value: "washer", label: "Clean the washing machine", price: 25 },
+  { value: "upholstery", label: "Upholstery and couch vacuum", price: 35 },
   { value: "baseboards", label: "Baseboards and detail dusting", price: 30 },
+  { value: "priority", label: "Priority 9 AM start", price: 20 },
 ] as const;
 
 export type AddOnValue = (typeof ADD_ONS)[number]["value"];
