@@ -50,6 +50,18 @@ export default async function BookingSuccess({
             Reference {bookingId.slice(0, 8)}
           </p>
         )}
+        {bookingId && (
+          <p className="mt-6 text-sm text-sage-deep">
+            Need a different day?{" "}
+            <Link
+              href={`/booking/manage?id=${bookingId}`}
+              className="text-sage-deep underline hover:text-ink"
+            >
+              Reschedule your booking
+            </Link>
+            .
+          </p>
+        )}
         <div className="mt-8">
           <Link
             href="/"

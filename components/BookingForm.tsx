@@ -8,23 +8,25 @@ import {
   SERVICE_VALUES,
   FREQUENCY_VALUES,
   ADD_ONS,
-  ADD_ON_VALUES,
   addOnsTotal,
+  addOnApplies,
   addOnLabel,
+  parseAddOns,
+  encodeAddOns,
   serviceLabel,
   frequencyLabel,
   type ServiceType,
   type Frequency,
+  type SelectedAddOn,
 } from "@/lib/constants";
-import { estimatePrice, formatUsd } from "@/lib/pricing";
+import { estimatePrice, formatUsd, OVERAGE_HOURLY } from "@/lib/pricing";
 
 type FormShape = {
   serviceType: ServiceType | "";
   frequency: Frequency | "";
   bedrooms: number;
   bathrooms: number;
-  squareFeet: number;
-  addOns: string[];
+  addOns: SelectedAddOn[];
   requestedExtras: string;
   scheduledDate: string; // "YYYY-MM-DD"
   scheduledTime: string; // "HH:mm"
@@ -41,7 +43,6 @@ const INITIAL: FormShape = {
   frequency: "",
   bedrooms: 2,
   bathrooms: 1,
-  squareFeet: 1200,
   addOns: [],
   requestedExtras: "",
   scheduledDate: "",
@@ -81,8 +82,7 @@ export type BookingPrefill = {
   frequency?: string;
   bedrooms?: number;
   bathrooms?: number;
-  squareFeet?: number;
-  addOns?: string[];
+  addOns?: string; // codificado "oven,windows:3"
   requestedExtras?: string;
   fullName?: string;
   email?: string;
@@ -94,12 +94,6 @@ export type BookingPrefill = {
 function clampRooms(n: number | undefined, fallback: number): number {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 20
     ? n
-    : fallback;
-}
-
-function clampSqft(n: number | undefined, fallback: number): number {
-  return typeof n === "number" && Number.isFinite(n) && n >= 100 && n <= 15000
-    ? Math.round(n)
     : fallback;
 }
 
@@ -118,8 +112,7 @@ function buildInitial(prefill?: BookingPrefill | null): FormShape {
       : INITIAL.frequency,
     bedrooms: clampRooms(prefill.bedrooms, INITIAL.bedrooms),
     bathrooms: clampRooms(prefill.bathrooms, INITIAL.bathrooms),
-    squareFeet: clampSqft(prefill.squareFeet, INITIAL.squareFeet),
-    addOns: (prefill.addOns ?? []).filter((v) => ADD_ON_VALUES.includes(v)),
+    addOns: parseAddOns(prefill.addOns ?? ""),
     requestedExtras: prefill.requestedExtras ?? INITIAL.requestedExtras,
     fullName: prefill.fullName ?? INITIAL.fullName,
     email: (prefill.email ?? INITIAL.email).toLowerCase(),
@@ -172,14 +165,26 @@ export default function BookingForm({
     setData((d) => ({ ...d, [key]: value }));
   }
 
-  function toggleAddOn(value: string) {
+  function toggleAddOn(def: (typeof ADD_ONS)[number]) {
+    setData((d) => {
+      const exists = d.addOns.some((a) => a.value === def.value);
+      if (exists) {
+        return { ...d, addOns: d.addOns.filter((a) => a.value !== def.value) };
+      }
+      const qty = def.perUnit ? (def.minUnits ?? 1) : 1;
+      return { ...d, addOns: [...d.addOns, { value: def.value, qty }] };
+    });
+  }
+
+  function setAddOnQty(value: string, qty: number) {
     setData((d) => ({
       ...d,
-      addOns: d.addOns.includes(value)
-        ? d.addOns.filter((v) => v !== value)
-        : [...d.addOns, value],
+      addOns: d.addOns.map((a) => (a.value === value ? { ...a, qty } : a)),
     }));
   }
+
+  const addOnQty = (value: string) =>
+    data.addOns.find((a) => a.value === value)?.qty ?? 0;
 
   const estimate = useMemo(() => {
     if (!data.serviceType || !data.frequency) return null;
@@ -188,15 +193,13 @@ export default function BookingForm({
       frequency: data.frequency,
       bedrooms: data.bedrooms,
       bathrooms: data.bathrooms,
-      squareFeet: data.squareFeet,
-      addOnsUsd: addOnsTotal(data.addOns),
+      addOnsUsd: addOnsTotal(data.addOns, data.serviceType),
     });
   }, [
     data.serviceType,
     data.frequency,
     data.bedrooms,
     data.bathrooms,
-    data.squareFeet,
     data.addOns,
   ]);
 
@@ -352,12 +355,22 @@ export default function BookingForm({
         </p>
         <h2 className="mt-3 text-4xl text-ink">Thank you, {data.fullName.split(" ")[0]}</h2>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-sage-deep">
-          We have your request for a {serviceLabel(data.serviceType || "")} and will
-          reach out shortly to confirm the date and finalize your estimate of{" "}
-          {formatUsd(state.low)} to {formatUsd(state.high)}.
+          We have your request for a {serviceLabel(data.serviceType || "")}, a
+          total of {formatUsd(state.price)} for about {state.hours} hours. We will
+          reach out shortly to confirm the date.
         </p>
         <p className="mt-6 text-xs uppercase tracking-widest text-sage">
           Reference {state.bookingId.slice(0, 8)}
+        </p>
+        <p className="mt-4 text-sm text-sage-deep">
+          Need a different day?{" "}
+          <a
+            href={`/booking/manage?id=${state.bookingId}`}
+            className="text-sage-deep underline hover:text-ink"
+          >
+            Reschedule your booking
+          </a>
+          .
         </p>
         {state.mode === "local" && (
           <p className="mt-3 text-xs text-amber">
@@ -388,8 +401,7 @@ export default function BookingForm({
       <input type="hidden" name="frequency" value={data.frequency} />
       <input type="hidden" name="bedrooms" value={data.bedrooms} />
       <input type="hidden" name="bathrooms" value={data.bathrooms} />
-      <input type="hidden" name="squareFeet" value={data.squareFeet} />
-      <input type="hidden" name="addOns" value={data.addOns.join(",")} />
+      <input type="hidden" name="addOns" value={encodeAddOns(data.addOns)} />
       <input type="hidden" name="requestedExtras" value={data.requestedExtras} />
       <input type="hidden" name="scheduledDate" value={data.scheduledDate} />
       <input type="hidden" name="scheduledTime" value={data.scheduledTime} />
@@ -463,67 +475,66 @@ export default function BookingForm({
                 />
               </div>
 
-              {/* Pies cuadrados aproximados (mueve el grueso del precio). */}
-              <div>
-                <div className="mb-2 flex items-baseline justify-between">
-                  <span className="text-sm uppercase tracking-widest text-sage">
-                    Approx. square feet
-                  </span>
-                  <span className="font-display text-xl text-ink">
-                    {data.squareFeet.toLocaleString("en-US")}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={500}
-                  max={4000}
-                  step={50}
-                  value={data.squareFeet}
-                  onChange={(e) => update("squareFeet", Number(e.target.value))}
-                  className="w-full accent-sage-deep"
-                />
-                <div className="mt-1 flex justify-between text-xs text-sage">
-                  <span>500</span>
-                  <span>4,000+</span>
-                </div>
-              </div>
-
               {/* Adicionales: se suman al precio automaticamente. */}
               <div>
                 <span className="mb-2 block text-sm uppercase tracking-widest text-sage">
                   Add-ons (optional)
                 </span>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {ADD_ONS.map((a) => {
-                    const on = data.addOns.includes(a.value);
+                  {ADD_ONS.filter((a) =>
+                    addOnApplies(a, data.serviceType || "general"),
+                  ).map((a) => {
+                    const on = data.addOns.some((x) => x.value === a.value);
+                    const qty = addOnQty(a.value);
                     return (
-                      <button
+                      <div
                         key={a.value}
-                        type="button"
-                        onClick={() => toggleAddOn(a.value)}
-                        aria-pressed={on}
-                        className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition ${
+                        className={`rounded-lg border px-4 py-3 text-sm transition ${
                           on
-                            ? "border-sage-deep bg-cream text-ink"
-                            : "border-sage/30 bg-paper text-sage-deep hover:border-sage"
+                            ? "border-sage-deep bg-cream"
+                            : "border-sage/30 bg-paper"
                         }`}
                       >
-                        <span>{a.label}</span>
-                        <span className="ml-2 shrink-0 text-amber">
-                          +{formatUsd(a.price)}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleAddOn(a)}
+                          aria-pressed={on}
+                          className="flex w-full items-center justify-between text-left"
+                        >
+                          <span className={on ? "text-ink" : "text-sage-deep"}>
+                            {a.label}
+                          </span>
+                          <span className="ml-2 shrink-0 text-amber">
+                            +{formatUsd(a.price)}
+                            {a.perUnit ? ` / ${a.unit?.replace(/s$/, "")}` : ""}
+                          </span>
+                        </button>
+                        {on && a.perUnit && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-xs uppercase tracking-widest text-sage">
+                              {a.unit}
+                            </span>
+                            <Counter
+                              label=""
+                              value={qty}
+                              min={a.minUnits ?? 1}
+                              max={40}
+                              onChange={(v) => setAddOnQty(a.value, v)}
+                            />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
 
-              <Field label="Anything else? (optional)">
+              <Field label="Any areas you'd like us to focus on? (optional)">
                 <textarea
                   value={data.requestedExtras}
                   onChange={(e) => update("requestedExtras", e.target.value)}
                   rows={2}
-                  placeholder="Blinds detail, interior walls, special instructions..."
+                  placeholder="Baseboards in the hallway, pet area, kitchen detail..."
                   className={inputClass}
                 />
               </Field>
@@ -661,15 +672,22 @@ export default function BookingForm({
         )}
       </div>
 
-      {/* Estimado en vivo */}
+      {/* Precio en vivo (un solo total) + tiempo estimado */}
       {estimate && (
-        <div className="flex items-center justify-between rounded-xl border border-sage/30 bg-cream px-5 py-4">
-          <span className="text-xs uppercase tracking-widest text-sage">
-            Estimated range
-          </span>
-          <span className="font-display text-2xl text-ink">
-            {formatUsd(estimate.low)} to {formatUsd(estimate.high)}
-          </span>
+        <div className="rounded-xl border border-sage/30 bg-cream px-5 py-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-widest text-sage">
+              Your price
+            </span>
+            <span className="font-display text-3xl text-ink">
+              {formatUsd(estimate.price)}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-sage-deep">
+            Estimated for about {estimate.hours} hours. If the clean runs longer
+            due to the home&apos;s condition, extra time is billed at{" "}
+            {formatUsd(OVERAGE_HOURLY)}/hour.
+          </p>
         </div>
       )}
 
@@ -851,23 +869,29 @@ function Review({
   const rows: Array<[string, string]> = [
     ["Clean", data.serviceType ? serviceLabel(data.serviceType) : "Not set"],
     ["Frequency", data.frequency ? frequencyLabel(data.frequency) : "Not set"],
-    [
-      "Home",
-      `${data.bedrooms} bed, ${data.bathrooms} bath, ${data.squareFeet.toLocaleString(
-        "en-US",
-      )} sq ft`,
-    ],
+    ["Home", `${data.bedrooms} bed, ${data.bathrooms} bath`],
     ["When", whenText],
     ["Name", data.fullName || "Not set"],
     ["Email", data.email || "Not set"],
     ["Phone", data.phone || "Not provided"],
     ["Zip", data.zipCode || "Not provided"],
   ];
-  if (data.addOns.length > 0) {
-    rows.push(["Add-ons", data.addOns.map(addOnLabel).join(", ")]);
+  const appliedAddOns = data.addOns.filter((a) => {
+    const def = ADD_ONS.find((d) => d.value === a.value);
+    return def ? addOnApplies(def, data.serviceType || "general") : false;
+  });
+  if (appliedAddOns.length > 0) {
+    rows.push([
+      "Add-ons",
+      appliedAddOns.map((a) => addOnLabel(a.value, a.qty)).join(", "),
+    ]);
   }
-  if (data.requestedExtras) rows.push(["Notes", data.requestedExtras]);
+  if (data.requestedExtras) rows.push(["Focus areas", data.requestedExtras]);
   if (data.allergies) rows.push(["Sensitivities", data.allergies]);
+  if (estimate) {
+    rows.push(["Total", formatUsd(estimate.price)]);
+    rows.push(["Estimated time", `about ${estimate.hours} hours`]);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -882,8 +906,9 @@ function Review({
         ))}
       </dl>
       <p className="text-sm leading-relaxed text-sage-deep">
-        This is an estimate, not a final charge. We will confirm the date and the
-        final price with you before any payment.
+        This quote is based on about {estimate?.hours ?? 0} hours of work. If the
+        clean runs longer due to the home&apos;s condition, extra time is billed
+        at {formatUsd(OVERAGE_HOURLY)}/hour.
         {estimate && estimate.discount > 0 && (
           <>
             {" "}

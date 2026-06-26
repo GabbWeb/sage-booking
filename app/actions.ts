@@ -6,7 +6,7 @@ import { estimatePrice } from "@/lib/pricing";
 import {
   SERVICE_VALUES,
   FREQUENCY_VALUES,
-  ADD_ON_VALUES,
+  parseAddOns,
   addOnsTotal,
   addOnLabel,
   serviceLabel,
@@ -29,8 +29,8 @@ export type BookingState =
   | {
       ok: true;
       bookingId: string;
-      low: number;
-      high: number;
+      price: number;
+      hours: number;
       mode: StoreMode;
       // Si Stripe esta configurado, URL de pago a la que redirige el cliente.
       checkoutUrl?: string | null;
@@ -64,12 +64,8 @@ export async function createBooking(
   const frequency = String(formData.get("frequency") ?? "");
   const bedrooms = Number(formData.get("bedrooms") ?? 0);
   const bathrooms = Number(formData.get("bathrooms") ?? 0);
-  const squareFeet = Number(formData.get("squareFeet") ?? 0);
-  // Adicionales elegidos: lista separada por comas, validada contra el catalogo.
-  const selectedAddOns = String(formData.get("addOns") ?? "")
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => ADD_ON_VALUES.includes(v));
+  // Adicionales elegidos (con cantidades), validados contra el catalogo.
+  const selectedAddOns = parseAddOns(String(formData.get("addOns") ?? ""));
   const extrasNote = String(formData.get("requestedExtras") ?? "").trim();
   const scheduledDate = String(formData.get("scheduledDate") ?? "").trim();
   const scheduledTime = String(formData.get("scheduledTime") ?? "").trim();
@@ -101,9 +97,6 @@ export async function createBooking(
   if (!Number.isFinite(bathrooms) || bathrooms < 0 || bathrooms > 20) {
     return { ok: false, error: "Bathrooms must be between 0 and 20." };
   }
-  if (squareFeet && (squareFeet < 100 || squareFeet > 15000)) {
-    return { ok: false, error: "Square footage looks off. Please check it." };
-  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
     return { ok: false, error: "Please choose a date." };
   }
@@ -120,15 +113,14 @@ export async function createBooking(
     frequency: frequency as Frequency,
     bedrooms,
     bathrooms,
-    squareFeet,
-    addOnsUsd: addOnsTotal(selectedAddOns),
+    addOnsUsd: addOnsTotal(selectedAddOns, serviceType),
   });
 
-  // Texto de extras para el panel: adicionales elegidos + nota libre.
+  // Texto de extras para el panel: adicionales elegidos + areas a enfocar.
   const requestedExtras =
     [
-      selectedAddOns.map(addOnLabel).join(", "),
-      extrasNote ? `Notes: ${extrasNote}` : "",
+      selectedAddOns.map((a) => addOnLabel(a.value, a.qty)).join(", "),
+      extrasNote ? `Focus: ${extrasNote}` : "",
     ]
       .filter(Boolean)
       .join(" · ") || "";
@@ -167,8 +159,8 @@ export async function createBooking(
       bedrooms,
       bathrooms,
       requestedExtras: requestedExtras || null,
-      estimateLow: estimate.low,
-      estimateHigh: estimate.high,
+      estimateLow: estimate.price,
+      estimateHigh: estimate.price,
       scheduledDate: startISO,
     });
 
@@ -202,7 +194,7 @@ export async function createBooking(
         const session = await createCheckoutSession({
           bookingId,
           stripeCustomerId,
-          amountCents: bookingChargeCents(estimate.low),
+          amountCents: bookingChargeCents(estimate.price),
           description: `${serviceLabel(serviceType)}, Sage Essence`,
           successUrl: `${origin}/booking/success?booking=${bookingId}`,
           cancelUrl: `${origin}/booking?canceled=1`,
@@ -218,8 +210,8 @@ export async function createBooking(
     return {
       ok: true,
       bookingId,
-      low: estimate.low,
-      high: estimate.high,
+      price: estimate.price,
+      hours: estimate.hours,
       mode: store.mode,
       checkoutUrl,
     };
@@ -387,6 +379,67 @@ export async function syncBookingToCalendar(input: {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not create the event.";
+    return { ok: false, error: message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reprogramacion por el cliente (link de "manage booking"). Cambia la fecha y
+// hora de una reserva existente, sin pisar otra reserva ya confirmada.
+// ---------------------------------------------------------------------------
+export type RescheduleResult =
+  | { ok: true; scheduledDate: string }
+  | { ok: false; error: string };
+
+export async function rescheduleBooking(input: {
+  bookingId: string;
+  scheduledDate: string; // "YYYY-MM-DD"
+  scheduledTime: string; // "HH:mm"
+}): Promise<RescheduleResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledDate)) {
+    return { ok: false, error: "Please choose a date." };
+  }
+  if (!/^\d{2}:\d{2}$/.test(input.scheduledTime)) {
+    return { ok: false, error: "Please choose a time." };
+  }
+  const startISO = `${input.scheduledDate}T${input.scheduledTime}:00`;
+
+  try {
+    const store = getStore();
+    const booking = await store.getBooking(input.bookingId);
+    if (!booking) return { ok: false, error: "Booking not found." };
+
+    // No pisar otra reserva confirmada en ese horario.
+    const slotKey = startISO.slice(0, 16);
+    const existing = await store.listBookings(500);
+    const taken = existing.some(
+      (b) =>
+        b.id !== input.bookingId &&
+        b.status === "confirmed" &&
+        (b.scheduled_date ?? "").slice(0, 16) === slotKey,
+    );
+    if (taken) {
+      return { ok: false, error: "That time is taken. Please pick another." };
+    }
+
+    await store.updateBookingSchedule(input.bookingId, startISO);
+
+    // Re-agendar en Google Calendar (best effort).
+    if (googleCalendarConfigured()) {
+      try {
+        await syncBookingToCalendar({ bookingId: input.bookingId, startISO });
+      } catch (calErr) {
+        console.error("[rescheduleBooking] calendario fallo:", calErr);
+      }
+    }
+
+    return {
+      ok: true,
+      scheduledDate: `${input.scheduledDate} ${input.scheduledTime}`,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not reschedule.";
     return { ok: false, error: message };
   }
 }

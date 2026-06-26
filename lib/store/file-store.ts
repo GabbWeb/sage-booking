@@ -218,6 +218,19 @@ export class FileStore implements DataStore {
     });
   }
 
+  updateBookingSchedule(
+    bookingId: string,
+    scheduledDateISO: string,
+  ): Promise<void> {
+    return withLock(async () => {
+      const db = await readDb();
+      const b = db.bookings.find((x) => x.id === bookingId);
+      if (!b) return;
+      b.scheduled_date = scheduledDateISO;
+      await writeDb(db);
+    });
+  }
+
   addExtraCharge(bookingId: string, input: ExtraChargeInput): Promise<string> {
     return withLock(async () => {
       const db = await readDb();

@@ -1,72 +1,70 @@
-// Tests de la logica de precio. Corre con: node scripts/verify-pricing.mts
+// Tests del modelo de precios (tabla de Katerina). node scripts/verify-pricing.mts
 import assert from "node:assert/strict";
 import {
   estimatePrice,
   formatUsd,
+  baseQuote,
+  durationHours,
   FREQUENCY_DISCOUNT,
-  SERVICE_MULTIPLIER,
 } from "../lib/pricing.ts";
 
-const base = {
-  serviceType: "deep" as const,
-  bedrooms: 2,
-  bathrooms: 1,
-  squareFeet: 1500,
-};
+const price = (
+  serviceType: "general" | "deep" | "move_in_out",
+  frequency: "once" | "weekly" | "biweekly" | "monthly",
+  bedrooms: number,
+  bathrooms: number,
+  addOnsUsd = 0,
+) =>
+  estimatePrice({ serviceType, frequency, bedrooms, bathrooms, addOnsUsd }).price;
 
-// 1) "once" no descuenta; rango valido y ajustado (~8%)
-const once = estimatePrice({ ...base, frequency: "once" });
-assert.equal(once.discount, 0, "once no descuenta");
-assert.ok(once.low > 0 && once.high >= once.low, "rango valido");
-assert.ok(once.high <= Math.round(once.low * 1.12), "rango ajustado, no una brecha grande");
+// 1) Precios EXACTOS de la hoja (one-time, sin adicionales)
+assert.equal(price("deep", "once", 2, 2), 335, "deep 2/2 = 335");
+assert.equal(price("general", "once", 3, 2), 245, "general 3/2 = 245");
+assert.equal(price("move_in_out", "once", 1, 1), 260, "move 1/1 = 260");
+assert.equal(price("general", "once", 1, 1), 135, "general 1/1 = 135");
 
-// 2) descuentos por frecuencia correctos
+// 2) Duracion de la hoja: 2/2 deep ~ 3.5 horas (ejemplo de Katerina)
+assert.equal(
+  estimatePrice({ serviceType: "deep", frequency: "once", bedrooms: 2, bathrooms: 2 }).hours,
+  3.5,
+  "deep 2/2 dura 3.5h",
+);
+
+// 3) La frecuencia descuenta (one-time > monthly > biweekly > weekly)
+const once = price("general", "once", 3, 2);
+const monthly = price("general", "monthly", 3, 2);
+const biweekly = price("general", "biweekly", 3, 2);
+const weekly = price("general", "weekly", 3, 2);
+assert.ok(
+  weekly < biweekly && biweekly < monthly && monthly < once,
+  "weekly < biweekly < monthly < once",
+);
+assert.equal(weekly, Math.round((245 * 0.8) / 5) * 5, "weekly = round5(245*0.8)");
+
+// 4) Descuentos por frecuencia (hoja)
 assert.equal(FREQUENCY_DISCOUNT.weekly, 0.2);
 assert.equal(FREQUENCY_DISCOUNT.biweekly, 0.15);
 assert.equal(FREQUENCY_DISCOUNT.monthly, 0.1);
 assert.equal(FREQUENCY_DISCOUNT.once, 0);
 
-// 3) la recurrencia abarata
-const weekly = estimatePrice({ ...base, frequency: "weekly" });
-assert.ok(weekly.low < once.low && weekly.high < once.high, "weekly mas barato que once");
+// 5) Los adicionales se suman al total
+assert.equal(price("deep", "once", 2, 2, 70), 335 + 70, "adicionales suman");
 
-// 4) a mayor frecuencia, menor precio (orden monotono)
-const biweekly = estimatePrice({ ...base, frequency: "biweekly" });
-const monthly = estimatePrice({ ...base, frequency: "monthly" });
-assert.ok(
-  weekly.low < biweekly.low && biweekly.low < monthly.low && monthly.low < once.low,
-  "weekly < biweekly < monthly < once",
-);
+// 6) Respaldo por formula fuera de la tabla (7 dormitorios)
+const big = baseQuote("general", 7, 3);
+assert.equal(big.base, Math.ceil((45 + 7 * 50 + 3 * 25) / 5) * 5, "formula 7/3");
+assert.ok(big.minutes > 0, "formula da duracion");
 
-// 5) mas pies cuadrados sube el precio
-const bigger = estimatePrice({ ...base, frequency: "once", squareFeet: 3000 });
-assert.ok(bigger.low > once.low, "mas sqft sube el precio");
+// 7) Profunda mas cara que estandar; mudanza la mas cara
+assert.ok(price("deep", "once", 3, 2) > price("general", "once", 3, 2));
+assert.ok(price("move_in_out", "once", 3, 2) > price("deep", "once", 3, 2));
 
-// 6) mas ambientes sube el precio
-const moreRooms = estimatePrice({
-  ...base,
-  frequency: "once",
-  bedrooms: 5,
-  bathrooms: 4,
-});
-assert.ok(moreRooms.low > once.low, "mas ambientes sube el precio");
+// 8) durationHours redondea a la media hora
+assert.equal(durationHours(160), 2.5, "2h40 -> 2.5h");
+assert.equal(durationHours(200), 3.5, "3h20 -> 3.5h");
 
-// 7) los adicionales se suman al total
-const withAddons = estimatePrice({ ...base, frequency: "once", addOnsUsd: 60 });
-assert.equal(withAddons.low, once.low + 60, "adicionales suman al low");
-assert.equal(withAddons.high, once.high + 60, "adicionales suman al high");
-
-// 8) multiplicadores de servicio: deep mas caro que general, mudanza el mas intenso
-const general = estimatePrice({ ...base, serviceType: "general", frequency: "once" });
-assert.ok(once.low > general.low, "deep mas caro que general");
-assert.equal(SERVICE_MULTIPLIER.general, 1);
-assert.ok(
-  SERVICE_MULTIPLIER.move_in_out >= SERVICE_MULTIPLIER.deep,
-  "move in/out es el mas intenso",
-);
-
-// 9) formato de moneda en USD sin decimales
-assert.equal(formatUsd(268), "$268");
+// 9) Formato USD sin decimales
+assert.equal(formatUsd(335), "$335");
 assert.equal(formatUsd(1500), "$1,500");
 
-console.log("OK pricing: sqft, adicionales, descuentos, monotonia, servicios y formato.");
+console.log("OK pricing: tabla de la hoja, duracion, frecuencia, adicionales y formato.");

@@ -18,11 +18,6 @@ export const SERVICE_TYPES = [
     label: "Move in or move out",
     blurb: "An empty home detailed in every corner.",
   },
-  {
-    value: "one_time",
-    label: "One time clean",
-    blurb: "A single visit, no ongoing commitment.",
-  },
 ] as const;
 
 export type ServiceType = (typeof SERVICE_TYPES)[number]["value"];
@@ -39,36 +34,105 @@ export type Frequency = (typeof FREQUENCIES)[number]["value"];
 export const SERVICE_VALUES = SERVICE_TYPES.map((s) => s.value);
 export const FREQUENCY_VALUES = FREQUENCIES.map((f) => f.value);
 
-// Servicios adicionales opcionales. El precio se suma al total. Referencias de
-// Austin: horno/heladera $25-50, ventanas $40-80. Replicado en el estimador del
-// landing (public/landing.html via scripts/build_landing.py); mantener en sync.
-export const ADD_ONS = [
-  { value: "oven", label: "Inside the oven", price: 30 },
+// ---------------------------------------------------------------------------
+// Servicios adicionales (hoja de Katerina). Algunos son por unidad (ventanas,
+// mascotas) y "baseboards" solo aplica a limpieza estandar (la profunda y el
+// move-out ya lo incluyen). Replicado en el estimador del landing
+// (public/landing.html via scripts/build_landing.py); mantener en sync.
+// ---------------------------------------------------------------------------
+export type AddOnDef = {
+  value: string;
+  label: string;
+  price: number;
+  perUnit?: boolean; // precio por unidad (cantidad elegible)
+  unit?: string; // etiqueta de unidad ("windows", "pets")
+  minUnits?: number; // minimo de unidades cuando se elige
+  standardOnly?: boolean; // solo aplica a limpieza estandar (general)
+};
+
+export const ADD_ONS: AddOnDef[] = [
+  { value: "oven", label: "Inside the oven", price: 40 },
   { value: "fridge", label: "Inside the fridge", price: 30 },
   { value: "dishwasher", label: "Inside the dishwasher", price: 25 },
-  { value: "windows", label: "Interior windows", price: 45 },
-  { value: "cabinets", label: "Inside kitchen cabinets", price: 40 },
-  { value: "laundry", label: "Laundry, wash and fold", price: 25 },
-  { value: "washer", label: "Clean the washing machine", price: 25 },
-  { value: "upholstery", label: "Upholstery and couch vacuum", price: 35 },
-  { value: "baseboards", label: "Baseboards and detail dusting", price: 30 },
-  { value: "priority", label: "Priority 9 AM start", price: 20 },
-] as const;
+  {
+    value: "baseboards",
+    label: "Baseboards and detail dusting",
+    price: 30,
+    standardOnly: true,
+  },
+  {
+    value: "windows",
+    label: "Interior windows",
+    price: 8,
+    perUnit: true,
+    unit: "windows",
+    minUnits: 2,
+  },
+  {
+    value: "pets",
+    label: "Pet surcharge",
+    price: 35,
+    perUnit: true,
+    unit: "pets",
+    minUnits: 1,
+  },
+];
 
-export type AddOnValue = (typeof ADD_ONS)[number]["value"];
 export const ADD_ON_VALUES: string[] = ADD_ONS.map((a) => a.value);
 
-/** Suma el precio de una lista de adicionales (ignora valores desconocidos). */
-export function addOnsTotal(values: string[]): number {
-  return values.reduce(
-    (sum, v) => sum + (ADD_ONS.find((a) => a.value === v)?.price ?? 0),
-    0,
-  );
+export type SelectedAddOn = { value: string; qty: number };
+
+/** Aplica un adicional a un servicio? (baseboards solo a estandar). */
+export function addOnApplies(def: AddOnDef, serviceType: string): boolean {
+  if (def.standardOnly && serviceType !== "general") return false;
+  return true;
 }
 
-/** Etiqueta legible de un adicional. */
-export function addOnLabel(value: string): string {
-  return ADD_ONS.find((a) => a.value === value)?.label ?? value;
+/**
+ * Parsea la lista de adicionales desde texto ("oven,windows:3,pets:2").
+ * Las unidades se fuerzan al minimo del adicional.
+ */
+export function parseAddOns(raw: string): SelectedAddOn[] {
+  if (!raw) return [];
+  const out: SelectedAddOn[] = [];
+  for (const piece of raw.split(",")) {
+    const [v, q] = piece.trim().split(":");
+    const def = ADD_ONS.find((a) => a.value === v);
+    if (!def) continue;
+    const min = def.minUnits ?? 1;
+    const qty = def.perUnit
+      ? Math.max(min, Number.parseInt(q ?? "", 10) || min)
+      : 1;
+    out.push({ value: v, qty });
+  }
+  return out;
+}
+
+/** Serializa adicionales a texto para FormData / query ("oven,windows:3"). */
+export function encodeAddOns(items: SelectedAddOn[]): string {
+  return items
+    .map((it) => {
+      const def = ADD_ONS.find((a) => a.value === it.value);
+      return def?.perUnit ? `${it.value}:${it.qty}` : it.value;
+    })
+    .join(",");
+}
+
+/** Suma el precio de los adicionales para un servicio dado. */
+export function addOnsTotal(items: SelectedAddOn[], serviceType: string): number {
+  return items.reduce((sum, it) => {
+    const def = ADD_ONS.find((a) => a.value === it.value);
+    if (!def || !addOnApplies(def, serviceType)) return sum;
+    return sum + def.price * (def.perUnit ? it.qty : 1);
+  }, 0);
+}
+
+/** Etiqueta legible de un adicional (con cantidad si corresponde). */
+export function addOnLabel(value: string, qty = 1): string {
+  const def = ADD_ONS.find((a) => a.value === value);
+  if (!def) return value;
+  if (def.perUnit && qty > 0) return `${def.label} (x${qty})`;
+  return def.label;
 }
 
 export function serviceLabel(value: string): string {

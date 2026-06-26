@@ -170,6 +170,18 @@ export class SupabaseStore implements DataStore {
     if (error) throw error;
   }
 
+  async updateBookingSchedule(
+    bookingId: string,
+    scheduledDateISO: string,
+  ): Promise<void> {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("bookings")
+      .update({ scheduled_date: scheduledDateISO })
+      .eq("id", bookingId);
+    if (error) throw error;
+  }
+
   async addExtraCharge(
     bookingId: string,
     input: ExtraChargeInput,

@@ -87,7 +87,7 @@ export default async function AdminDashboard({
                   <p className="mt-2 text-sm text-ink">
                     {b.final_amount != null
                       ? `${formatUsd(b.final_amount)} paid`
-                      : `${formatUsd(b.estimate_low)} to ${formatUsd(b.estimate_high)}`}
+                      : formatUsd(b.estimate_low)}
                   </p>
                 </div>
               </div>

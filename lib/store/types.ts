@@ -124,6 +124,8 @@ export interface DataStore {
   ): Promise<void>;
   /** Registra un cargo extra y devuelve su id. */
   addExtraCharge(bookingId: string, input: ExtraChargeInput): Promise<string>;
+  /** Cambia la fecha/hora agendada de una reserva (reprogramacion). */
+  updateBookingSchedule(bookingId: string, scheduledDateISO: string): Promise<void>;
 
   // --- Google Calendar (Fase 3) ---
   /** Guarda el id del evento de Google Calendar en la reserva. */
