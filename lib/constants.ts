@@ -47,18 +47,20 @@ export type AddOnDef = {
   perUnit?: boolean; // precio por unidad (cantidad elegible)
   unit?: string; // etiqueta de unidad ("windows", "pets")
   minUnits?: number; // minimo de unidades cuando se elige
-  standardOnly?: boolean; // solo aplica a limpieza estandar (general)
+  includedIn?: string[]; // servicios que YA lo incluyen (no se ofrece ahi)
 };
 
 export const ADD_ONS: AddOnDef[] = [
-  { value: "oven", label: "Inside the oven", price: 40 },
-  { value: "fridge", label: "Inside the fridge", price: 30 },
+  // Horno y heladera ya van incluidos en move-in/out.
+  { value: "oven", label: "Inside the oven", price: 40, includedIn: ["move_in_out"] },
+  { value: "fridge", label: "Inside the fridge", price: 30, includedIn: ["move_in_out"] },
   { value: "dishwasher", label: "Inside the dishwasher", price: 25 },
   {
+    // Zocalos: la profunda y el move-out ya lo incluyen; solo en estandar.
     value: "baseboards",
     label: "Baseboards and detail dusting",
     price: 30,
-    standardOnly: true,
+    includedIn: ["deep", "move_in_out"],
   },
   {
     value: "windows",
@@ -82,10 +84,9 @@ export const ADD_ON_VALUES: string[] = ADD_ONS.map((a) => a.value);
 
 export type SelectedAddOn = { value: string; qty: number };
 
-/** Aplica un adicional a un servicio? (baseboards solo a estandar). */
+/** Se ofrece este adicional para el servicio? (no si ya viene incluido). */
 export function addOnApplies(def: AddOnDef, serviceType: string): boolean {
-  if (def.standardOnly && serviceType !== "general") return false;
-  return true;
+  return !def.includedIn || !def.includedIn.includes(serviceType);
 }
 
 /**

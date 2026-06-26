@@ -6,8 +6,10 @@ import { estimatePrice } from "@/lib/pricing";
 import {
   SERVICE_VALUES,
   FREQUENCY_VALUES,
+  ADD_ONS,
   parseAddOns,
   addOnsTotal,
+  addOnApplies,
   addOnLabel,
   serviceLabel,
   type ServiceType,
@@ -116,10 +118,14 @@ export async function createBooking(
     addOnsUsd: addOnsTotal(selectedAddOns, serviceType),
   });
 
-  // Texto de extras para el panel: adicionales elegidos + areas a enfocar.
+  // Texto de extras para el panel: adicionales que aplican + areas a enfocar.
+  const applicableAddOns = selectedAddOns.filter((a) => {
+    const def = ADD_ONS.find((d) => d.value === a.value);
+    return def ? addOnApplies(def, serviceType) : false;
+  });
   const requestedExtras =
     [
-      selectedAddOns.map((a) => addOnLabel(a.value, a.qty)).join(", "),
+      applicableAddOns.map((a) => addOnLabel(a.value, a.qty)).join(", "),
       extrasNote ? `Focus: ${extrasNote}` : "",
     ]
       .filter(Boolean)
