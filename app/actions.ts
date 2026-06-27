@@ -181,8 +181,8 @@ export async function createBooking(
           console.error("[createBooking] calendario fallo:", calErr);
         }
       }
-      // Email de preparacion (Fase 4). Best effort.
-      await sendBookingEmail(store, bookingId, "prep");
+      // Email de confirmacion (cierre). Best effort.
+      await sendBookingEmail(store, bookingId, "confirmation");
     }
 
     // Pago con Stripe (Fase 2). Si no hay llaves, se omite y queda como hoy:

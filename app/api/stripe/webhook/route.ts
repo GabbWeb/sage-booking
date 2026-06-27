@@ -71,8 +71,8 @@ export async function POST(req: Request) {
             }
           }
 
-          // Email de preparacion (Fase 4). Best effort, no duplica.
-          await sendBookingEmail(store, bookingId, "prep");
+          // Email de confirmacion al pagar (cierre). Best effort, no duplica.
+          await sendBookingEmail(store, bookingId, "confirmation");
         }
       }
     }

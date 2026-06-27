@@ -1,8 +1,12 @@
 import type { DataStore } from "@/lib/store";
 import { serviceLabel } from "@/lib/constants";
+import { formatUsd } from "@/lib/pricing";
 import { buildEmail } from "./templates";
 import { sendEmail } from "./send";
 import type { EmailData, EmailType } from "./types";
+
+// Dominio del sitio para los links de los emails (reprogramar, etc.).
+const SITE_URL = process.env.SITE_URL || "https://thesageessence.com";
 
 const MONTHS = [
   "January",
@@ -46,10 +50,14 @@ export async function sendBookingEmail(
     const booking = await store.getBooking(bookingId);
     if (!booking?.customer?.email) return { ok: false };
 
+    const priceAmount = booking.final_amount ?? booking.estimate_low;
     const data: EmailData = {
       firstName: booking.customer.full_name.split(" ")[0] || "there",
       serviceLabel: serviceLabel(booking.service_type),
       scheduledDateText: scheduledText(booking.scheduled_date),
+      priceText: priceAmount != null ? formatUsd(priceAmount) : undefined,
+      manageUrl: `${SITE_URL}/booking/manage?id=${bookingId}`,
+      signUrl: process.env.DOCUSIGN_POWERFORM_URL || undefined,
       reviewUrl: process.env.SAGE_REVIEW_URL || undefined,
     };
 

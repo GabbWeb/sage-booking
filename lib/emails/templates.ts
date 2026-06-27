@@ -284,12 +284,76 @@ function thankyou(data: EmailData): BuiltEmail {
   };
 }
 
+// --------------------------------------------------------------------------
+// Email: confirmacion (inmediato al pagar). Cierra el circuito: detalle de la
+// reserva, firma del acuerdo (DocuSign, si esta configurado) y reprogramar.
+// --------------------------------------------------------------------------
+function confirmation(data: EmailData): BuiltEmail {
+  const when = data.scheduledDateText
+    ? `for ${escapeHtml(data.scheduledDateText)}`
+    : "soon, we will confirm the date with you";
+  const total = data.priceText
+    ? ` Your total is ${escapeHtml(data.priceText)}.`
+    : "";
+
+  let body =
+    `<p style="margin:14px 0 0;font-family:${SANS};font-size:15px;line-height:1.65;color:${COLORS.sageDeep};">Hi ${escapeHtml(
+      data.firstName,
+    )}, your ${escapeHtml(
+      data.serviceLabel.toLowerCase(),
+    )} is confirmed ${when}.${total}</p>` +
+    renderSections([
+      {
+        paragraphs: [
+          "This price covers the estimated time for your home. If the clean runs longer due to its condition, extra time is billed at $60 per hour.",
+        ],
+      },
+    ]);
+
+  if (data.signUrl) {
+    body +=
+      renderSections([
+        {
+          heading: "One quick step",
+          paragraphs: ["Please sign your service agreement so we are all set."],
+        },
+      ]) + button("Sign the agreement", data.signUrl);
+  }
+
+  if (data.manageUrl) {
+    body +=
+      renderSections([
+        { paragraphs: ["Need a different day? You can reschedule here."] },
+      ]) + button("Reschedule your booking", data.manageUrl);
+  }
+
+  return {
+    subject: "Your booking is confirmed",
+    html: layout({
+      preheader: "Your clean is confirmed.",
+      title: "You are booked",
+      bodyHtml: body,
+    }),
+    text: toText([
+      `Hi ${data.firstName}, your ${data.serviceLabel.toLowerCase()} is confirmed ${data.scheduledDateText ? `for ${data.scheduledDateText}` : "soon"}.`,
+      data.priceText ? `Total: ${data.priceText}` : "",
+      "",
+      "This price covers the estimated time for your home. If it runs longer due to the home's condition, extra time is billed at $60 per hour.",
+      data.signUrl ? `\nSign your service agreement: ${data.signUrl}` : "",
+      data.manageUrl ? `\nReschedule your booking: ${data.manageUrl}` : "",
+      "",
+      "Sage Essence LLC, Austin TX",
+    ]),
+  };
+}
+
 function toText(lines: string[]): string {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 const BUILDERS: Record<EmailType, (data: EmailData) => BuiltEmail> = {
   prep,
+  confirmation,
   reminder_2days: reminder,
   thankyou,
 };
@@ -298,4 +362,9 @@ export function buildEmail(type: EmailType, data: EmailData): BuiltEmail {
   return BUILDERS[type](data);
 }
 
-export const EMAIL_TYPES: EmailType[] = ["prep", "reminder_2days", "thankyou"];
+export const EMAIL_TYPES: EmailType[] = [
+  "prep",
+  "confirmation",
+  "reminder_2days",
+  "thankyou",
+];
