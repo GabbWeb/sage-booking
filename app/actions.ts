@@ -25,7 +25,11 @@ import {
   createCalendarEvent,
   defaultEndISO,
 } from "@/lib/google/calendar";
-import { sendBookingEmail, sendLeadNotification } from "@/lib/emails/dispatch";
+import {
+  sendBookingEmail,
+  sendOnTheWayEmail,
+  sendLeadNotification,
+} from "@/lib/emails/dispatch";
 
 export type BookingState =
   | {
@@ -448,4 +452,15 @@ export async function rescheduleBooking(input: {
       err instanceof Error ? err.message : "Could not reschedule.";
     return { ok: false, error: message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Aviso "en camino" (lo dispara el panel cuando la limpiadora sale). Hoy por
+// email; cuando Twilio este activo, el mismo boton podra mandar SMS.
+// ---------------------------------------------------------------------------
+export async function notifyOnTheWay(
+  bookingId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const store = getStore();
+  return sendOnTheWayEmail(store, bookingId);
 }

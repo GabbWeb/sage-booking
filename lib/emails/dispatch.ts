@@ -71,6 +71,34 @@ export async function sendBookingEmail(
   }
 }
 
+/**
+ * Email "en camino", disparado a mano desde el panel cuando la limpiadora sale.
+ * No usa dedupe: se puede reenviar (ej. si se reprograma). Best effort.
+ */
+export async function sendOnTheWayEmail(
+  store: DataStore,
+  bookingId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const booking = await store.getBooking(bookingId);
+    if (!booking?.customer?.email) {
+      return { ok: false, error: "This booking has no customer email." };
+    }
+    const data: EmailData = {
+      firstName: booking.customer.full_name.split(" ")[0] || "there",
+      serviceLabel: serviceLabel(booking.service_type),
+    };
+    const email = buildEmail("on_the_way", data);
+    const res = await sendEmail({ to: booking.customer.email, email });
+    return { ok: res.ok, error: res.ok ? undefined : "Could not send the email." };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not send.",
+    };
+  }
+}
+
 // Aviso interno a Sage de un lead abandonado (Fase 5). Best effort.
 export async function sendLeadNotification(lead: {
   fullName?: string | null;

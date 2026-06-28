@@ -347,6 +347,31 @@ function confirmation(data: EmailData): BuiltEmail {
   };
 }
 
+// --------------------------------------------------------------------------
+// Email: en camino (lo dispara el panel cuando la limpiadora sale).
+// --------------------------------------------------------------------------
+function onTheWay(data: EmailData): BuiltEmail {
+  const body = `<p style="margin:14px 0 0;font-family:${SANS};font-size:15px;line-height:1.65;color:${COLORS.sageDeep};">Hi ${escapeHtml(
+    data.firstName,
+  )}, your ${escapeHtml(
+    data.serviceLabel.toLowerCase(),
+  )} team is on the way and will arrive shortly. If anything changes we will reach out. See you soon.</p>`;
+
+  return {
+    subject: "Your Sage Essence cleaner is on the way",
+    html: layout({
+      preheader: "Your Sage Essence team is on the way.",
+      title: "On the way",
+      bodyHtml: body,
+    }),
+    text: toText([
+      `Hi ${data.firstName}, your ${data.serviceLabel.toLowerCase()} team is on the way and will arrive shortly. See you soon.`,
+      "",
+      "Sage Essence LLC, Austin TX",
+    ]),
+  };
+}
+
 function toText(lines: string[]): string {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -354,6 +379,7 @@ function toText(lines: string[]): string {
 const BUILDERS: Record<EmailType, (data: EmailData) => BuiltEmail> = {
   prep,
   confirmation,
+  on_the_way: onTheWay,
   reminder_2days: reminder,
   thankyou,
 };
@@ -365,6 +391,7 @@ export function buildEmail(type: EmailType, data: EmailData): BuiltEmail {
 export const EMAIL_TYPES: EmailType[] = [
   "prep",
   "confirmation",
+  "on_the_way",
   "reminder_2days",
   "thankyou",
 ];

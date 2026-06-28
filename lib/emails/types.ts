@@ -1,7 +1,12 @@
 // Datos que necesitan las plantillas de email. Se arman desde una reserva +
 // su cliente. Mantener plano y serializable.
 
-export type EmailType = "prep" | "confirmation" | "reminder_2days" | "thankyou";
+export type EmailType =
+  | "prep"
+  | "confirmation"
+  | "on_the_way"
+  | "reminder_2days"
+  | "thankyou";
 
 export type EmailData = {
   firstName: string;

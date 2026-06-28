@@ -3,6 +3,7 @@ import { getStore } from "@/lib/store";
 import { serviceLabel, frequencyLabel } from "@/lib/constants";
 import { formatUsd } from "@/lib/pricing";
 import ExtraChargeForm from "@/components/admin/ExtraChargeForm";
+import OnTheWayButton from "@/components/admin/OnTheWayButton";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function AdminDashboard({
                   Extras: {b.requested_extras}
                 </p>
               )}
+              <OnTheWayButton bookingId={b.id} />
               <ExtraChargeForm bookingId={b.id} />
             </article>
           ))}
