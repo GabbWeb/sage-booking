@@ -30,6 +30,7 @@ import {
   sendOnTheWayEmail,
   sendLeadNotification,
 } from "@/lib/emails/dispatch";
+import { twilioConfigured } from "@/lib/twilio";
 
 export type BookingState =
   | {
@@ -455,12 +456,28 @@ export async function rescheduleBooking(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Aviso "en camino" (lo dispara el panel cuando la limpiadora sale). Hoy por
-// email; cuando Twilio este activo, el mismo boton podra mandar SMS.
+// Aviso "en camino" (lo dispara el panel cuando la limpiadora sale). Manda SMS
+// si Twilio esta configurado y hay telefono; si no, cae a email.
 // ---------------------------------------------------------------------------
 export async function notifyOnTheWay(
   bookingId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; channel?: "sms" | "email"; error?: string }> {
   const store = getStore();
-  return sendOnTheWayEmail(store, bookingId);
+  const booking = await store.getBooking(bookingId);
+  if (!booking?.customer) return { ok: false, error: "Booking not found." };
+
+  const phone = booking.customer.phone ?? "";
+  const firstName = booking.customer.full_name.split(" ")[0] || "there";
+
+  // SMS primero (mas inmediato) si se puede.
+  if (twilioConfigured() && phone) {
+    const { sendSms } = await import("@/lib/twilio");
+    const body = `Hi ${firstName}, your Sage Essence cleaner is on the way and will arrive shortly. See you soon!`;
+    const res = await sendSms({ to: phone, body });
+    if (res.ok && res.mode === "twilio") return { ok: true, channel: "sms" };
+    // Si el SMS falla, seguimos al email.
+  }
+
+  const emailRes = await sendOnTheWayEmail(store, bookingId);
+  return { ok: emailRes.ok, channel: "email", error: emailRes.error };
 }

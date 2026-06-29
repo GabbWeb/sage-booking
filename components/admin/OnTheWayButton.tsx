@@ -15,7 +15,10 @@ export default function OnTheWayButton({ bookingId }: { bookingId: string }) {
     setPending(false);
     setMsg(
       res.ok
-        ? { ok: true, text: "On-the-way email sent." }
+        ? {
+            ok: true,
+            text: res.channel === "sms" ? "On-the-way text sent." : "On-the-way email sent.",
+          }
         : { ok: false, text: res.error ?? "Could not send." },
     );
   }
