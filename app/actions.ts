@@ -12,6 +12,7 @@ import {
   addOnApplies,
   addOnLabel,
   serviceLabel,
+  slotsOverlap,
   type ServiceType,
   type Frequency,
 } from "@/lib/constants";
@@ -139,14 +140,15 @@ export async function createBooking(
   try {
     const store = getStore();
 
-    // Evitar superposicion: si ya hay una reserva confirmada (pagada) en ese
-    // horario, no se puede tomar de nuevo. Las pendientes no bloquean.
-    const slotKey = startISO.slice(0, 16); // YYYY-MM-DDTHH:mm
+    // Evitar superposicion: cada reserva ocupa ~2 horas, asi que el horario
+    // pedido no puede caer dentro de la ventana de otra reserva activa
+    // (pendiente o confirmada) del mismo dia. Las canceladas no bloquean.
     const existing = await store.listBookings(500);
     const slotTaken = existing.some(
       (b) =>
-        b.status === "confirmed" &&
-        (b.scheduled_date ?? "").slice(0, 16) === slotKey,
+        b.status !== "cancelled" &&
+        b.scheduled_date != null &&
+        slotsOverlap(startISO, b.scheduled_date),
     );
     if (slotTaken) {
       return {
@@ -420,14 +422,16 @@ export async function rescheduleBooking(input: {
     const booking = await store.getBooking(input.bookingId);
     if (!booking) return { ok: false, error: "Booking not found." };
 
-    // No pisar otra reserva confirmada en ese horario.
-    const slotKey = startISO.slice(0, 16);
+    // No pisar otra reserva activa: el nuevo horario no puede caer dentro de la
+    // ventana de 2 horas de otra reserva (pendiente o confirmada), salvo la
+    // propia que se esta reprogramando.
     const existing = await store.listBookings(500);
     const taken = existing.some(
       (b) =>
         b.id !== input.bookingId &&
-        b.status === "confirmed" &&
-        (b.scheduled_date ?? "").slice(0, 16) === slotKey,
+        b.status !== "cancelled" &&
+        b.scheduled_date != null &&
+        slotsOverlap(startISO, b.scheduled_date),
     );
     if (taken) {
       return { ok: false, error: "That time is taken. Please pick another." };

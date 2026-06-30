@@ -2,6 +2,33 @@
 // accion del servidor. Los valores (value) coinciden con los del modelo de
 // datos en Supabase.
 
+// Cada limpieza ocupa al equipo unas 2 horas, asi que al reservar un horario se
+// bloquean las franjas dentro de esa ventana (no solo la franja exacta). Mismo
+// criterio en el formulario y en el servidor.
+export const SLOT_BLOCK_MINUTES = 120;
+
+/** Minutos desde medianoche de un ISO naive "YYYY-MM-DDTHH:mm[:ss]". NaN si no parsea. */
+export function isoMinutes(iso: string): number {
+  const m = iso.match(/T(\d{2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+}
+
+/**
+ * True si dos horarios del mismo dia se pisan, dado el bloqueo de 2 horas.
+ * Acepta ISO naive o solo "YYYY-MM-DDTHH:mm". Distintos dias nunca se pisan.
+ * Exactamente a 2 horas NO se pisan (turnos consecutivos, espalda con espalda).
+ */
+export function slotsOverlap(isoA: string, isoB: string): boolean {
+  if (isoA.slice(0, 10) !== isoB.slice(0, 10)) return false;
+  const a = isoMinutes(isoA);
+  const b = isoMinutes(isoB);
+  return (
+    Number.isFinite(a) &&
+    Number.isFinite(b) &&
+    Math.abs(a - b) < SLOT_BLOCK_MINUTES
+  );
+}
+
 export const SERVICE_TYPES = [
   {
     value: "deep",

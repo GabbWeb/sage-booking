@@ -18,6 +18,7 @@ import {
   type ServiceType,
   type Frequency,
   type SelectedAddOn,
+  slotsOverlap,
 } from "@/lib/constants";
 import { estimatePrice, formatUsd, OVERAGE_HOURLY } from "@/lib/pricing";
 
@@ -66,10 +67,13 @@ const STEP_TITLES = [
 
 // Horarios disponibles (hora de Austin). Cada limpieza dura unas 2 horas.
 const TIME_SLOTS: Array<{ value: string; label: string }> = [
-  { value: "08:00", label: "8:00 AM" },
+  { value: "09:00", label: "9:00 AM" },
   { value: "10:00", label: "10:00 AM" },
+  { value: "11:00", label: "11:00 AM" },
   { value: "12:00", label: "12:00 PM" },
+  { value: "13:00", label: "1:00 PM" },
   { value: "14:00", label: "2:00 PM" },
+  { value: "15:00", label: "3:00 PM" },
   { value: "16:00", label: "4:00 PM" },
 ];
 
@@ -149,10 +153,24 @@ export default function BookingForm({
   prefill?: BookingPrefill | null;
   takenSlots?: string[];
 }) {
-  // Horarios ya ocupados (formato "YYYY-MM-DDTHH:mm"), para no dejar elegirlos.
-  const takenSet = useMemo(() => new Set(takenSlots ?? []), [takenSlots]);
-  const isSlotTaken = (date: string, time: string) =>
-    date !== "" && takenSet.has(`${date}T${time}`);
+  // Horarios ya reservados (formato "YYYY-MM-DDTHH:mm"). Cada reserva ocupa ~2
+  // horas, asi que una franja queda bloqueada si cae dentro de esa ventana de
+  // cualquier reserva del mismo dia (no solo si coincide exactamente).
+  const takenByDay = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const slot of takenSlots ?? []) {
+      const day = slot.slice(0, 10);
+      (map.get(day) ?? map.set(day, []).get(day)!).push(slot);
+    }
+    return map;
+  }, [takenSlots]);
+  const isSlotTaken = (date: string, time: string) => {
+    if (date === "") return false;
+    const candidate = `${date}T${time}`;
+    return (takenByDay.get(date) ?? []).some((booked) =>
+      slotsOverlap(candidate, booked),
+    );
+  };
   const [state, formAction, pending] = useActionState<BookingState, FormData>(
     createBooking,
     null,

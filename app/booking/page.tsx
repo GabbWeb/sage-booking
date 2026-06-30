@@ -28,13 +28,14 @@ export default async function Booking({
 }) {
   const sp = await searchParams;
 
-  // Horarios ya ocupados por reservas confirmadas (pagadas), para no ofrecerlos
-  // y evitar superposicion. Formato "YYYY-MM-DDTHH:mm".
+  // Horarios ya ocupados por reservas activas (pendientes o confirmadas), para
+  // no ofrecerlos y evitar superposicion. Se excluyen las canceladas. El bloqueo
+  // de la ventana de 2 horas lo aplica el formulario. Formato "YYYY-MM-DDTHH:mm".
   let takenSlots: string[] = [];
   try {
     const bookings = await getStore().listBookings(500);
     takenSlots = bookings
-      .filter((b) => b.status === "confirmed" && b.scheduled_date)
+      .filter((b) => b.status !== "cancelled" && b.scheduled_date)
       .map((b) => (b.scheduled_date as string).slice(0, 16));
   } catch {
     takenSlots = [];
