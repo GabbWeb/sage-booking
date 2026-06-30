@@ -18,6 +18,8 @@ export type EmailData = {
   manageUrl?: string; // link para reprogramar
   signUrl?: string; // link de firma (DocuSign PowerForm), si esta configurado
   reviewUrl?: string; // link a la resena de Google (Fase 4)
+  paymentPending?: boolean; // aun no pago: Sage enviara un link de pago a mano
+
 };
 
 export type BuiltEmail = {

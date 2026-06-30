@@ -289,6 +289,7 @@ function thankyou(data: EmailData): BuiltEmail {
 // reserva, firma del acuerdo (DocuSign, si esta configurado) y reprogramar.
 // --------------------------------------------------------------------------
 function confirmation(data: EmailData): BuiltEmail {
+  const pending = data.paymentPending === true;
   const when = data.scheduledDateText
     ? `for ${escapeHtml(data.scheduledDateText)}`
     : "soon, we will confirm the date with you";
@@ -296,12 +297,16 @@ function confirmation(data: EmailData): BuiltEmail {
     ? ` Your total is ${escapeHtml(data.priceText)}.`
     : "";
 
+  const lead = pending
+    ? `Hi ${escapeHtml(data.firstName)}, thank you. We have your ${escapeHtml(
+        data.serviceLabel.toLowerCase(),
+      )} request ${when}.${total}`
+    : `Hi ${escapeHtml(data.firstName)}, your ${escapeHtml(
+        data.serviceLabel.toLowerCase(),
+      )} is confirmed ${when}.${total}`;
+
   let body =
-    `<p style="margin:14px 0 0;font-family:${SANS};font-size:15px;line-height:1.65;color:${COLORS.sageDeep};">Hi ${escapeHtml(
-      data.firstName,
-    )}, your ${escapeHtml(
-      data.serviceLabel.toLowerCase(),
-    )} is confirmed ${when}.${total}</p>` +
+    `<p style="margin:14px 0 0;font-family:${SANS};font-size:15px;line-height:1.65;color:${COLORS.sageDeep};">${lead}</p>` +
     renderSections([
       {
         paragraphs: [
@@ -309,6 +314,17 @@ function confirmation(data: EmailData): BuiltEmail {
         ],
       },
     ]);
+
+  if (pending) {
+    body += renderSections([
+      {
+        heading: "Completing your booking",
+        paragraphs: [
+          "To hold your spot, we will email you a secure payment link shortly. Your booking is confirmed once payment is received.",
+        ],
+      },
+    ]);
+  }
 
   if (data.signUrl) {
     body +=
@@ -328,17 +344,24 @@ function confirmation(data: EmailData): BuiltEmail {
   }
 
   return {
-    subject: "Your booking is confirmed",
+    subject: pending ? "We received your booking" : "Your booking is confirmed",
     html: layout({
-      preheader: "Your clean is confirmed.",
-      title: "You are booked",
+      preheader: pending
+        ? "We have your booking. A secure payment link is on its way."
+        : "Your clean is confirmed.",
+      title: pending ? "Your booking request is in" : "You are booked",
       bodyHtml: body,
     }),
     text: toText([
-      `Hi ${data.firstName}, your ${data.serviceLabel.toLowerCase()} is confirmed ${data.scheduledDateText ? `for ${data.scheduledDateText}` : "soon"}.`,
+      pending
+        ? `Hi ${data.firstName}, thank you. We have your ${data.serviceLabel.toLowerCase()} request ${data.scheduledDateText ? `for ${data.scheduledDateText}` : "soon"}.`
+        : `Hi ${data.firstName}, your ${data.serviceLabel.toLowerCase()} is confirmed ${data.scheduledDateText ? `for ${data.scheduledDateText}` : "soon"}.`,
       data.priceText ? `Total: ${data.priceText}` : "",
       "",
       "This price covers the estimated time for your home. If it runs longer due to the home's condition, extra time is billed at $60 per hour.",
+      pending
+        ? "\nTo hold your spot, we will email you a secure payment link shortly. Your booking is confirmed once payment is received."
+        : "",
       data.signUrl ? `\nSign your service agreement: ${data.signUrl}` : "",
       data.manageUrl ? `\nReschedule your booking: ${data.manageUrl}` : "",
       "",

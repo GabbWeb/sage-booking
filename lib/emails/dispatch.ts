@@ -59,6 +59,9 @@ export async function sendBookingEmail(
       manageUrl: `${SITE_URL}/booking/manage?id=${bookingId}`,
       signUrl: process.env.DOCUSIGN_POWERFORM_URL || undefined,
       reviewUrl: process.env.SAGE_REVIEW_URL || undefined,
+      // Si aun no hay monto cobrado, el pago se gestiona a mano: Sage le envia
+      // un link de Stripe. Cuando el webhook marca el pago, deja de estar pending.
+      paymentPending: booking.final_amount == null,
     };
 
     const email = buildEmail(type, data);
