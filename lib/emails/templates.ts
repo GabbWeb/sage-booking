@@ -294,7 +294,9 @@ function confirmation(data: EmailData): BuiltEmail {
     ? `for ${escapeHtml(data.scheduledDateText)}`
     : "soon, we will confirm the date with you";
   const total = data.priceText
-    ? ` Your total is ${escapeHtml(data.priceText)}.`
+    ? pending
+      ? ` Your estimated total is ${escapeHtml(data.priceText)}.`
+      : ` Your total is ${escapeHtml(data.priceText)}.`
     : "";
 
   const lead = pending
@@ -318,9 +320,9 @@ function confirmation(data: EmailData): BuiltEmail {
   if (pending) {
     body += renderSections([
       {
-        heading: "Completing your booking",
+        heading: "What happens next",
         paragraphs: [
-          "To hold your spot, we will email you a secure payment link shortly. Your booking is confirmed once payment is received.",
+          "We are preparing your quote and will reach out shortly to confirm your booking, the date, and the details.",
         ],
       },
     ]);
@@ -347,7 +349,7 @@ function confirmation(data: EmailData): BuiltEmail {
     subject: pending ? "We received your booking" : "Your booking is confirmed",
     html: layout({
       preheader: pending
-        ? "We have your booking. A secure payment link is on its way."
+        ? "We have your request and are preparing your quote."
         : "Your clean is confirmed.",
       title: pending ? "Your booking request is in" : "You are booked",
       bodyHtml: body,
@@ -360,7 +362,7 @@ function confirmation(data: EmailData): BuiltEmail {
       "",
       "This price covers the estimated time for your home. If it runs longer due to the home's condition, extra time is billed at $60 per hour.",
       pending
-        ? "\nTo hold your spot, we will email you a secure payment link shortly. Your booking is confirmed once payment is received."
+        ? "\nWe are preparing your quote and will reach out shortly to confirm your booking, the date, and the details."
         : "",
       data.signUrl ? `\nSign your service agreement: ${data.signUrl}` : "",
       data.manageUrl ? `\nReschedule your booking: ${data.manageUrl}` : "",

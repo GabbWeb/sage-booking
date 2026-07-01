@@ -383,10 +383,10 @@ export default function BookingForm({
         </p>
         <h2 className="mt-3 text-4xl text-ink">Thank you, {data.fullName.split(" ")[0]}</h2>
         <p className="mx-auto mt-4 max-w-md text-base leading-relaxed text-sage-deep">
-          We have your request for a {serviceLabel(data.serviceType || "")}, a
-          total of {formatUsd(state.price)} for about {state.hours} hours. We will
-          reach out shortly to confirm the date and send you a secure link to
-          complete your payment.
+          We have your request for a {serviceLabel(data.serviceType || "")}, an
+          estimated total of {formatUsd(state.price)} for about {state.hours}{" "}
+          hours. We are preparing your quote and will reach out shortly to
+          confirm the date and details.
         </p>
         <p className="mt-6 text-xs uppercase tracking-widest text-sage">
           Reference {state.bookingId.slice(0, 8)}
