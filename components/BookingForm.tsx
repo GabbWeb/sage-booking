@@ -304,31 +304,41 @@ export default function BookingForm({
     headingRef.current?.focus();
   }, [step]);
 
-  function stepIsValid(s: number): boolean {
+  // Detalle de lo que falta en el paso (null si esta completo). Se muestra al
+  // usuario para que sepa exactamente que corregir, en vez de un aviso generico.
+  function stepError(s: number): string | null {
     switch (s) {
       case 0:
-        return data.serviceType !== "";
+        return data.serviceType !== "" ? null : "Please choose a service.";
       case 1:
-        return data.frequency !== "";
+        return data.frequency !== "" ? null : "Please choose how often.";
       case 2:
-        return (
-          data.bedrooms >= 0 &&
+        return data.bedrooms >= 0 &&
           data.bedrooms <= 20 &&
           data.bathrooms >= 0 &&
           data.bathrooms <= 20
-        );
+          ? null
+          : "Please enter the number of bedrooms and bathrooms.";
       case 3:
-        return data.fullName.trim() !== "" && EMAIL_RE.test(data.email.trim());
+        if (data.fullName.trim() === "") return "Please enter your name.";
+        if (!EMAIL_RE.test(data.email.trim()))
+          return "Please enter a valid email address.";
+        return null;
       case 4:
-        return (
-          data.scheduledDate !== "" &&
-          data.scheduledTime !== "" &&
-          data.scheduledDate >= minBookingDate() &&
-          !isSlotTaken(data.scheduledDate, data.scheduledTime)
-        );
+        if (data.scheduledDate === "") return "Please pick a date.";
+        if (data.scheduledDate < minBookingDate())
+          return "Please pick a date no earlier than tomorrow.";
+        if (data.scheduledTime === "") return "Please select a time.";
+        if (isSlotTaken(data.scheduledDate, data.scheduledTime))
+          return "That time is no longer available. Please pick another.";
+        return null;
       default:
-        return true;
+        return null;
     }
+  }
+
+  function stepIsValid(s: number): boolean {
+    return stepError(s) === null;
   }
 
   function goNext() {
@@ -699,9 +709,9 @@ export default function BookingForm({
           {step === 5 && <Review data={data} estimate={estimate} />}
         </div>
 
-        {touchedNext && !stepIsValid(step) && (
+        {touchedNext && stepError(step) && (
           <p role="alert" className="mt-4 text-sm text-amber">
-            Please complete this step before continuing.
+            {stepError(step)}
           </p>
         )}
       </div>
