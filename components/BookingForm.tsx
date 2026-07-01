@@ -598,6 +598,21 @@ export default function BookingForm({
                   />
                 </Field>
               </div>
+              <p className="-mt-1 text-xs leading-relaxed text-sage">
+                By providing your phone number you agree to receive service
+                related text messages from Sage Essence, such as booking
+                confirmations, reminders, and on the way alerts. Message
+                frequency varies. Message and data rates may apply. Reply STOP
+                to opt out, HELP for help. See our{" "}
+                <a href="/privacy" className="underline hover:text-sage-deep">
+                  Privacy Policy
+                </a>{" "}
+                and{" "}
+                <a href="/terms" className="underline hover:text-sage-deep">
+                  Terms of Service
+                </a>
+                .
+              </p>
               <Field label="Allergies or sensitivities (optional)">
                 <textarea
                   value={data.allergies}
