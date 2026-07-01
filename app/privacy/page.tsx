@@ -81,19 +81,23 @@ export default function PrivacyPolicy() {
             for help.
           </p>
           <p>
-            Your consent to receive text messages and the mobile information
-            collected for that purpose are not shared with or sold to third
-            parties or affiliates for their marketing purposes.
+            No mobile information will be shared with third parties or affiliates
+            for marketing or promotional purposes. Text messaging opt-in data and
+            consent will not be shared with any third parties. We share
+            information only with the service providers described below, and only
+            as needed to operate our service.
           </p>
         </Section>
 
         <Section heading="How we share information">
           <p>
-            We do not sell your personal information. We share it only with
-            trusted service providers that help us operate, and only as needed to
-            provide our service: payment processing (Stripe), text messaging
-            (Twilio), email delivery (Resend), and scheduling (Google Calendar).
-            We may also disclose information if required by law.
+            We do not sell your personal information, and no mobile information
+            will be shared with third parties or affiliates for marketing or
+            promotional purposes. We share information only with trusted service
+            providers that help us operate, and only as needed to provide our
+            service: payment processing (Stripe), text messaging (Twilio), email
+            delivery (Resend), and scheduling (Google Calendar). We may also
+            disclose information if required by law.
           </p>
         </Section>
 
